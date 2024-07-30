@@ -52,9 +52,6 @@ async def download_media_from_channel(channel_id: int):
             m.is_downloaded = True
             db.commit()
             db.refresh(m)
-            # import ipdb
-            #
-            # ipdb.set_trace()
 
 
 async def fetch_messages_form_channel(channel_id: str):
