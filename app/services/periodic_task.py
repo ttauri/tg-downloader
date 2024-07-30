@@ -42,7 +42,7 @@ async def download_media_from_channel(channel_id: int):
     db = SessionLocal()
     sorting_type = settings.sorting_type
     logger.info(f"Using {sorting_type} sorting")
-    media = get_all_not_downloaded_media(db, channel_id, order="large")
+    media = get_all_not_downloaded_media(db, channel_id, order=sorting_type)
     async with client:
         for m in media:
             message = await client.get_messages(int(channel_id), ids=m.tg_message_id)
