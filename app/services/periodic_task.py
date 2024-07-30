@@ -40,6 +40,7 @@ async def check_for_new_messages():
 
 async def download_media_from_channel(channel_id: int):
     db = SessionLocal()
+    sorting_type = config.
     media = get_all_not_downloaded_media(db, channel_id, order="large")
     async with client:
         for m in media:
@@ -48,8 +49,10 @@ async def download_media_from_channel(channel_id: int):
             media_path = await download_media_from_message(
                 message, f"{settings.media_download_path}/{str(m.tg_channel_id)[4:]}/"
             )
-            logger.info(f"{media_path} finished")
+            filename = media_path.split("/")[-1]
+            logger.info(f"{media_path} finished. Filename: {filename}")
             m.is_downloaded = True
+            m.filename = filename
             db.commit()
             db.refresh(m)
 

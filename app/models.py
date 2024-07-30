@@ -13,6 +13,7 @@ class Media(Base):
     media_type = Column(String, index=True)
     size = Column(Float)
     is_downloaded = Column(Boolean, default=False)
+    filename = Column(String, index=True)
 
 
 class Channel(Base):

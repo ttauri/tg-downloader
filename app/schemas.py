@@ -8,6 +8,7 @@ class MediaBase(BaseModel):
     media_type: str
     size: float
     is_downloaded: bool
+    filename: str
 
 
 class MediaCreate(MediaBase):
