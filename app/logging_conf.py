@@ -1,5 +1,9 @@
 import logging
 
+# Silence telethon loggers
+logging.getLogger("telethon").setLevel(logging.WARNING)
+logging.getLogger("telethon.network").setLevel(logging.WARNING)
+logging.getLogger("telethon.client").setLevel(logging.WARNING)
 
 log = logging.basicConfig(
     level=logging.INFO,
