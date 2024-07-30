@@ -19,7 +19,7 @@ class Media(MediaBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ChannelBase(BaseModel):
@@ -35,4 +35,4 @@ class Channel(ChannelBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
