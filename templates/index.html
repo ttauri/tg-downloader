@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Subscribed Channels</h2>
+<table class="channel-table">
+    <thead>
+        <tr>
+            <th>Channel Name</th>
+            <th>Channel ID</th>
+            <th>Unsubscribe</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for channel in sub_channels %}
+        <tr>
+            <td><a href="/channel_details/?channel_id={{ channel.channel_id }}">{{ channel.channel_name }}</a></td>
+            <td>{{ channel.channel_id }}</td>
+            <td><form action="/unsubscribe_to_channel/" method="post">
+                <input type="hidden" id="channel_id" name="channel_id" value="{{ channel.channel_id }}">
+                <button type="submit">Unsubscribe</button>
+            </form></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Available Channels</h2>
+<table class="channel-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>ID</th>
+            <th>Subscribe</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for chan in available_channels %}
+        <tr>
+            <td>{{ chan.channel_name }}</td>
+            <td>{{ chan.channel_id }}</td>
+            <td><form action="/subscribe_to_channel/" method="post">
+                <input type="hidden" id="channel_id" name="channel_id" value="{{ chan.channel_id }}">
+                <button type="submit">Subscribe</button>
+            </form></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

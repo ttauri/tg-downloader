@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>{{channel.channel_name}} Details </h2>
+
+<table class="channel-table">
+    <thead>
+        <tr>
+            <th>Param</th>
+            <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Channel ID</td>
+            <td>{{ channel.channel_id }}</td>
+        </tr>
+        <tr>
+            <td>Messages fetched</td>
+            <td>{{ all_media }}</td>
+            <td>
+              <form action="/fetch_messages/?channel_id={{channel.channel_id}}" method="post">
+                  <input type="submit" value="Fetch messages data" />
+              </form>
+            </td>
+        </tr>
+        <tr>
+            <td>Messages downloaded</td>
+            <td>{{ downloaded_media}}</td>
+            <td>
+              <form action="/download_media_from_channel/?channel_id={{channel.channel_id}}" method="post">
+                  <input type="submit" value="Download media" />
+              </form>
+            </td>
+        </tr>
+        <tr>
+            <td>Messages not downloaded</td>
+            <td>{{ not_downloaded_media}}</td>
+        </tr>
+    </tbody>
+</table>
+<!---->
+<!-- <form action="/check_messages/" method="post"> -->
+<!--     <label for="channel_id">Channel ID:</label> -->
+<!--     <input type="text" id="channel_id" name="channel_id"> -->
+<!--     <button type="submit">Do</button> -->
+<!-- </form> -->
+{% endblock %}
+
