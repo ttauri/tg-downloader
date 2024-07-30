@@ -40,7 +40,8 @@ async def check_for_new_messages():
 
 async def download_media_from_channel(channel_id: int):
     db = SessionLocal()
-    sorting_type = config.
+    sorting_type = config.sorting_type
+    logger.info(f"Using {sorting_type} sorting")
     media = get_all_not_downloaded_media(db, channel_id, order="large")
     async with client:
         for m in media:
