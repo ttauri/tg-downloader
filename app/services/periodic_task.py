@@ -41,12 +41,14 @@ async def check_for_new_messages():
 async def download_media_from_channel(channel_id: int):
     db = SessionLocal()
     sorting_type = settings.sorting_type
-    logger.info(f"Using {sorting_type} sorting")
+    logger.info(f"Using {sorting_type} sorting fror channel media")
     media = get_all_not_downloaded_media(db, channel_id, order=sorting_type)
     async with client:
         for m in media:
             message = await client.get_messages(int(channel_id), ids=m.tg_message_id)
-            logger.info(f"Downloading media {m.id}, size:{m.size / (1024 * 1024)}MB")
+            logger.info(
+                f"Downloading media ID:{m.id}, Size:{round(m.size / (1024 * 1024), 3)}MB"
+            )
             media_path = await download_media_from_message(
                 message, f"{settings.media_download_path}/{str(m.tg_channel_id)[4:]}/"
             )
