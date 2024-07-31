@@ -13,6 +13,7 @@ class VideoConcatenator:
     def process(self):
         try:
             video_info = analyze_videos(self.input_files)
+            print(video_info)
             output_resolution = determine_output_resolution(video_info, self.output_option)
             
             if self.output_option == 'dynamic':
@@ -28,6 +29,7 @@ class VideoConcatenator:
             else:
                 output_params = OUTPUT_OPTIONS[self.output_option]
 
+            print(f"Output video params are {output_params}")
             normalized_files = self._normalize_videos(video_info, output_params)
             self._concatenate_videos(normalized_files, output_params)
         except Exception as e:
