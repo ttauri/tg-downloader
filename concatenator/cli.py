@@ -9,7 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
-from concatenator.utils import cleanup_temp_directory
+from concatenator.utils import cleanup_temp_directory, sort_videos_by_orientation
 from concatenator.core import VideoConcatenator
 
 def main():
@@ -29,8 +29,15 @@ def main():
         default="mp4,avi,mov,mkv",
         help="Comma-separated list of video file extensions to process (default: mp4,avi,mov,mkv)",
     )
+    parser.add_argument("--sort", action="store_true", help="Sort videos by orientation before processing")
 
     args = parser.parse_args()
+
+    if args.sort:
+        print("Sorting videos by orientation...")
+        sort_videos_by_orientation(args.input_directory)
+        print("Sorting complete. Videos are now in 'horizontal' and 'vertical' subdirectories.")
+        return
 
     # Get list of video files in the input directory
     extensions = args.extensions.split(",")

@@ -18,7 +18,6 @@ def analyze_videos(input_files):
             print("       This file may be incomplete or have a missing moov atom.")
             continue
         video_stream = next((stream for stream in info['streams'] if stream['codec_type'] == 'video'), None)
-        import ipdb; ipdb.set_trace()
         if video_stream:
             video_info.append({
                 'file': input_file,
@@ -151,3 +150,46 @@ def cleanup_temp_directory():
     temp_dir = None
 
 
+def sort_videos_by_orientation(input_directory):
+    ffmpeg = FFmpegWrapper()
+    
+    # Create directories for horizontal and vertical videos
+    horizontal_dir = os.path.join(input_directory, 'horizontal')
+    vertical_dir = os.path.join(input_directory, 'vertical')
+    os.makedirs(horizontal_dir, exist_ok=True)
+    os.makedirs(vertical_dir, exist_ok=True)
+
+    # Get all video files in the input directory
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv')
+    video_files = [f for f in os.listdir(input_directory) if f.lower().endswith(video_extensions)]
+
+    for video_file in video_files:
+        input_path = os.path.join(input_directory, video_file)
+        try:
+            # Probe the video to get its dimensions
+            probe = ffmpeg.probe(input_path)
+            video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+            
+            if video_stream:
+                width = int(video_stream['width'])
+                height = int(video_stream['height'])
+                
+                # Determine orientation and move the file
+                if width >= height:
+                    destination = os.path.join(horizontal_dir, video_file)
+                else:
+                    destination = os.path.join(vertical_dir, video_file)
+                
+                shutil.move(input_path, destination)
+                print(f"Moved {video_file} to {'horizontal' if width >= height else 'vertical'} folder")
+            else:
+                print(f"Warning: No video stream found in {video_file}")
+        except Exception as e:
+            print(f"Error processing {video_file}: {str(e)}")
+
+    # Print summary
+    horizontal_count = len(os.listdir(horizontal_dir))
+    vertical_count = len(os.listdir(vertical_dir))
+    print(f"\nSorting complete:")
+    print(f"Horizontal videos: {horizontal_count}")
+    print(f"Vertical videos: {vertical_count}")

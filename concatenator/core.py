@@ -49,7 +49,7 @@ class VideoConcatenator:
                     "height": height,
                     "frame_rate": OUTPUT_OPTIONS["dynamic"]["frame_rate"],
                     # "video_bitrate": f"{width * height // 1000}k",  # Adjust bitrate based on resolution
-                    "video_bitrate": output_bitrate,
+                    "video_bitrate": f"{output_bitrate}",
                     "audio_bitrate": OUTPUT_OPTIONS["dynamic"]["audio_bitrate"],
                     "sample_rate": OUTPUT_OPTIONS["dynamic"]["sample_rate"],
                 }
