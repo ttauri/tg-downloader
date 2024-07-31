@@ -17,7 +17,7 @@ def main():
     parser.add_argument(
         "input_directory", help="Directory containing input video files"
     )
-    parser.add_argument("--output", required=True, help="Output file name")
+    parser.add_argument("--output", required=False, help="Output file name")
     parser.add_argument(
         "--option",
         choices=["1080p", "720p", "dynamic"],

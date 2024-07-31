@@ -23,7 +23,8 @@ def analyze_videos(input_files):
                 'file': input_file,
                 'width': int(video_stream['width']),
                 'height': int(video_stream['height']),
-                'bit_rate': int(video_stream['bit_rate'])
+                'bit_rate': int(video_stream['bit_rate']),
+                'duration': float(video_stream['duration'])
             })
     return video_info
 
@@ -60,7 +61,17 @@ def transform_to_16_9(width, height):
 
 def determine_output_bit_rate(video_info, target_option):
     if target_option == 'dynamic':
-        return max([br['bit_rate'] for br in video_info])
+        # mbr = max([br['bit_rate'] for br in video_info])
+        # print(f"Max bit rate: {mbr}")
+        # return mbr
+
+        total_weighted_bitrate = sum(vid['bit_rate'] * vid['duration'] for vid in video_info)
+        max_bitrate = sum([vid['bit_rate'] for vid in video_info])
+        print(f"Max bitrate {max_bitrate}")
+        total_duration = sum([vid['duration'] for vid in video_info])
+        weighted_average_bitrate = total_weighted_bitrate / total_duration
+        print(f"Weighted average bitrate: {weighted_average_bitrate}")
+        return weighted_average_bitrate
 
 
 def determine_output_resolution(video_info, target_option):
