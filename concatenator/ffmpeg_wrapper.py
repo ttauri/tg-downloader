@@ -2,159 +2,131 @@ import subprocess
 import json
 from .exceptions import FFmpegError
 from tqdm import tqdm
+import shlex
 import re
 
 
 class FFmpegWrapper:
+    def _is_invalid_mp4_error(self, stderr):
+        return "moov atom not found" in stderr or "Invalid data found when processing input" in stderr
+
     def probe(self, input_file):
-        cmd = [
-            "ffprobe",
-            "-v",
-            "quiet",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            input_file,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise FFmpegError(f"FFprobe failed: {result.stderr}")
-        return json.loads(result.stdout)
+        cmd = ['ffprobe', '-v', 'error', '-show_format', '-show_streams', '-print_format', 'json', input_file]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            if self._is_invalid_mp4_error(e.stderr):
+                return None  # Indicate an invalid file without raising an exception
+            error_message = f"FFprobe failed for {input_file}:\n"
+            error_message += f"Command: {' '.join(shlex.quote(arg) for arg in cmd)}\n"
+            error_message += f"Return code: {e.returncode}\n"
+            error_message += f"Standard output: {e.stdout}\n"
+            error_message += f"Standard error: {e.stderr}\n"
+            raise FFmpegError(error_message)
+        except json.JSONDecodeError as e:
+            raise FFmpegError(f"FFprobe output is not valid JSON for {input_file}: {str(e)}")
+
+
 
     def check_video(self, input_file):
-        cmd = ["ffmpeg", "-v", "error", "-i", input_file, "-f", "null", "-"]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode == 0 and not result.stderr
+        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets', 
+               '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', input_file]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return int(result.stdout.strip()) > 0
+        except subprocess.CalledProcessError as e:
+            if self._is_invalid_mp4_error(e.stderr):
+                return False
+            error_message = f"Video check failed for {input_file}:\n"
+            error_message += f"Command: {' '.join(shlex.quote(arg) for arg in cmd)}\n"
+            error_message += f"Return code: {e.returncode}\n"
+            error_message += f"Standard output: {e.stdout}\n"
+            error_message += f"Standard error: {e.stderr}\n"
+            raise FFmpegError(error_message)
+        except ValueError:
+            return False
 
-    def resize_pad(
-        self,
-        input_file,
-        output_file,
-        width,
-        height,
-        frame_rate,
-        video_bitrate,
-        audio_bitrate,
-        sample_rate,
-    ):
-        # Get total number of frames
+    def resize_pad(self, input_file, output_file, width, height, frame_rate, video_bitrate, audio_bitrate, sample_rate):
         probe = self.probe(input_file)
-        total_frames = int(probe["streams"][0]["nb_frames"])
+        if probe is None:
+            raise FFmpegError(f"Unable to probe file: {input_file}. The file may be corrupted or invalid.")
+
+        # Check if the input file has an audio stream
+        has_audio = any(stream['codec_type'] == 'audio' for stream in probe['streams'])
 
         cmd = [
-            "ffmpeg",
-            "-i",
-            input_file,
-            "-vf",
-            f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1",
-            "-r",
-            str(frame_rate),
-            "-b:v",
-            video_bitrate,
-            "-b:a",
-            audio_bitrate,
-            "-ar",
-            str(sample_rate),
-            "-c:v",
-            "libx264",
-            "-c:a",
-            "aac",
-            "-y",
-            output_file,
+            'ffmpeg',
+            '-i', input_file,
         ]
 
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, universal_newlines=True)
+        if not has_audio:
+            # Add silent audio input
+            cmd.extend([
+                '-f', 'lavfi',
+                '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100'
+            ])
 
-        pbar = tqdm(total=total_frames, unit="frames", desc=f"Processing {input_file}")
-        for line in process.stderr:
-            if "frame=" in line:
-                current_frame = int(line.split("frame=")[1].split()[0])
-                pbar.update(current_frame - pbar.n)
-        pbar.close()
-
-        # if process.returncode != 0:
-
-        # raise FFmpegError(f"FFmpeg resize_pad failed for {input_file}")
-
-    # def concatenate(self, input_files, output_file, output_params):
-    #     input_args = []
-    #     for file in input_files:
-    #         input_args.extend(['-i', file])
-    #
-    #     filter_complex = f"concat=n={len(input_files)}:v=1:a=1[outv][outa]"
-    #
-    #     cmd = [
-    #         'ffmpeg',
-    #         *input_args,
-    #         '-filter_complex', filter_complex,
-    #         '-map', '[outv]',
-    #         '-map', '[outa]',
-    #         '-c:v', 'libx264',
-    #         '-c:a', 'aac',
-    #         '-b:v', output_params['video_bitrate'],
-    #         '-b:a', output_params['audio_bitrate'],
-    #         '-r', str(output_params['frame_rate']),
-    #         '-ar', str(output_params['sample_rate']),
-    #         '-y',
-    #         output_file
-    #     ]
-    #     result = subprocess.run(cmd, capture_output=True, text=True)
-    #     if result.returncode != 0:
-    #         raise FFmpegError(f"FFmpeg concatenation failed: {result.stderr}")
-    def concatenate(self, input_files, output_file, output_params):
-        input_args = []
-        for file in input_files:
-            input_args.extend(["-i", file])
-
-        filter_complex = f"concat=n={len(input_files)}:v=1:a=1[outv][outa]"
-
-        cmd = [
-            "ffmpeg",
-            *input_args,
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            "[outv]",
-            "-map",
-            "[outa]",
-            "-c:v",
-            "libx264",
-            "-c:a",
-            "aac",
-            "-b:v",
-            output_params["video_bitrate"],
-            "-b:a",
-            output_params["audio_bitrate"],
-            "-r",
-            str(output_params["frame_rate"]),
-            "-ar",
-            str(output_params["sample_rate"]),
-            "-y",
-            output_file,
-        ]
-
-        # Get total duration of all input files
-        total_duration = sum(
-            float(self.probe(f)["format"]["duration"]) for f in input_files
-        )
+        cmd.extend([
+            '-filter_complex', f'[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v]',
+            '-map', '[v]',
+            '-map', '0:a' if has_audio else '1:a',
+            '-c:v', 'libx264',
+            '-r', str(frame_rate),
+            '-b:v', video_bitrate,
+            '-c:a', 'aac',
+            '-b:a', audio_bitrate,
+            '-ar', str(sample_rate),
+            '-shortest',
+            '-y',
+            output_file
+        ])
 
         process = subprocess.Popen(cmd, stderr=subprocess.PIPE, universal_newlines=True)
-
-        pbar = tqdm(total=total_duration, unit="s", desc="Concatenating videos")
-        error_message = ""
+        
+        error_output = ""
         for line in process.stderr:
-            time_match = re.search(r"time=(\d{2}):(\d{2}):(\d{2}\.\d{2})", line)
-            if time_match:
-                hours, minutes, seconds = time_match.groups()
-                current_time = (
-                    float(hours) * 3600 + float(minutes) * 60 + float(seconds)
-                )
-                pbar.update(current_time - pbar.n)
-            elif "Error" in line or "error" in line:
-                error_message += line
-        pbar.close()
+            error_output += line
+            print(line, end='')  # Print FFmpeg output in real-time
 
         process.wait()
         if process.returncode != 0:
-            raise FFmpegError(f"FFmpeg concatenation failed: {error_message}")
+            raise FFmpegError(f"FFmpeg resize_pad failed for {input_file}. Error output:\n{error_output}")
+
+
+
+    def concatenate(self, input_files, output_file, output_params):
+        input_args = []
+        for file in input_files:
+            input_args.extend(['-i', file])
+        
+        filter_complex = f"concat=n={len(input_files)}:v=1:a=1[outv][outa]"
+        
+        cmd = [
+            'ffmpeg',
+            *input_args,
+            '-filter_complex', filter_complex,
+            '-map', '[outv]',
+            '-map', '[outa]',
+            '-c:v', 'libx264',
+            '-c:a', 'aac',
+            '-b:v', output_params['video_bitrate'],
+            '-b:a', output_params['audio_bitrate'],
+            '-r', str(output_params['frame_rate']),
+            '-ar', str(output_params['sample_rate']),
+            '-y',
+            output_file
+        ]
+
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, universal_newlines=True)
+        
+        error_output = ""
+        for line in process.stderr:
+            error_output += line
+            print(line, end='')  # Print FFmpeg output in real-time
+
+        process.wait()
+        if process.returncode != 0:
+            raise FFmpegError(f"FFmpeg concatenation failed: {error_output}")
+
+
