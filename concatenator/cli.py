@@ -2,12 +2,14 @@ import argparse
 import sys
 import os
 import glob
+from tqdm import tqdm
 
 # Add the parent directory of 'concatenator' to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
+from concatenator.utils import cleanup_temp_directory
 from concatenator.core import VideoConcatenator
 
 def main():
@@ -46,9 +48,18 @@ def main():
 
     print(f"Found {len(input_files)} video files to process.")
 
-    concatenator = VideoConcatenator(input_files, args.option, args.output)
-    concatenator.process()
-    print(f"Concatenated video saved as {args.output}")
+    try:
+        with tqdm(total=3, desc="Overall progress") as pbar:
+            concatenator = VideoConcatenator(input_files, args.option, args.output)
+            pbar.update(1)
+            concatenator.process()
+            pbar.update(1)
+            print(f"Concatenated video saved as {args.output}")
+            pbar.update(1)
+    except Exception as e:
+        print(f"Error: {str(e)}")
+    finally:
+        cleanup_temp_directory()
 
 
 if __name__ == "__main__":

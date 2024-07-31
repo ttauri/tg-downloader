@@ -1,5 +1,10 @@
 import os
 from .ffmpeg_wrapper import FFmpegWrapper
+import shutil
+import tempfile
+
+# Add these at the top of the file
+temp_dir = None
 
 
 def analyze_videos(input_files):
@@ -20,32 +25,6 @@ def analyze_videos(input_files):
                 }
             )
     return video_info
-
-
-# def determine_output_resolution(video_info, target_option):
-#     if target_option in ["1080p", "720p"]:
-#         return target_option
-#
-#     # For dynamic option
-#     max_width = max(info["width"] for info in video_info)
-#     max_height = max(info["height"] for info in video_info)
-#
-#     # Define standard 16:9 resolutions
-#     standard_resolutions = [
-#         (1920, 1080),
-#         (1280, 720),
-#         (854, 480),
-#         (640, 360),
-#         (426, 240),
-#     ]
-#
-#     # Find the smallest standard resolution that's larger than or equal to the max input resolution
-#     for width, height in standard_resolutions:
-#         if width >= max_width and height >= max_height:
-#             return f"{width}x{height}"
-#
-#     # If all videos are smaller than the smallest standard resolution, use the smallest
-#     return f"{standard_resolutions[-1][0]}x{standard_resolutions[-1][1]}"
 
 
 def determine_output_resolution(video_info, target_option):
@@ -75,9 +54,11 @@ def determine_output_resolution(video_info, target_option):
     return f"{standard_resolutions[0][0]}x{standard_resolutions[0][1]}"
 
 
+
 def normalize_video(input_file, output_params, ffmpeg):
+    global temp_dir
     base_name = os.path.splitext(os.path.basename(input_file))[0]
-    output_file = f"normalized_{base_name}.mp4"
+    output_file = os.path.join(temp_dir, f"normalized_{base_name}.mp4")
 
     ffmpeg.resize_pad(
         input_file,
@@ -91,4 +72,17 @@ def normalize_video(input_file, output_params, ffmpeg):
     )
 
     return output_file
+
+def create_temp_directory():
+    global temp_dir
+    temp_dir = tempfile.mkdtemp(prefix="video_concatenator_")
+    return temp_dir
+
+
+def cleanup_temp_directory():
+    global temp_dir
+    if temp_dir and os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    temp_dir = None
+
 
