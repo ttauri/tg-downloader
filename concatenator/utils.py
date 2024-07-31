@@ -18,40 +18,91 @@ def analyze_videos(input_files):
             print("       This file may be incomplete or have a missing moov atom.")
             continue
         video_stream = next((stream for stream in info['streams'] if stream['codec_type'] == 'video'), None)
+        import ipdb; ipdb.set_trace()
         if video_stream:
             video_info.append({
                 'file': input_file,
                 'width': int(video_stream['width']),
-                'height': int(video_stream['height'])
+                'height': int(video_stream['height']),
+                'bit_rate': int(video_stream['bit_rate'])
             })
     return video_info
 
 
-def determine_output_resolution(video_info, target_option):
-    if target_option in ["1080p", "720p"]:
-        return target_option
+def average_resolution_16_9(resolutions):
+    # Calculate average width and height
+    total_width = sum(res[0] for res in resolutions)
+    total_height = sum(res[1] for res in resolutions)
+    count = len(resolutions)
+    avg_width = total_width // count
+    avg_height = total_height // count
+    # Transform to 16:9
+    if avg_width / avg_height > 16 / 9:
+        # Width is larger relative to height, so we'll keep width and increase height
+        new_height = (avg_width * 9) // 16
+        new_width = avg_width
+    else:
+        # Height is larger relative to width, so we'll keep height and increase width
+        new_width = (avg_height * 16) // 9
+        new_height = avg_height
+    # Ensure even numbers
+    new_width = (new_width + 1) & ~1
+    new_height = (new_height + 1) & ~1
+    return new_width, new_height
 
-    # For dynamic option
+
+def transform_to_16_9(width, height):
+    # Calculate the target width for 16:9 aspect ratio
+    target_width = (height * 16) // 9
+    # Round to the nearest multiple of 2 for even dimensions
+    target_width = (target_width + 1) & ~1
+    return target_width, height
+
+
+def determine_output_resolution(video_info, target_option):
     max_width = max(info["width"] for info in video_info)
     print(f"Max video width is {max_width}")
     max_height = max(info["height"] for info in video_info)
     print(f"Max video height is {max_height}")
 
-    # Define standard 16:9 resolutions
-    standard_resolutions = [(1920, 1080), (1280, 720), (854, 480), (640, 360)]
+    if target_option in ["1080p", "720p"]:
+        return target_option
 
-    # Find the smallest standard resolution that's larger than or equal to both max dimensions
-    for width, height in standard_resolutions:
-        if (
-            width >= max_width
-            and width >= max_height
-            and height >= max_width
-            and height >= max_height
-        ):
-            return f"{width}x{height}"
+    # elif target_option == "dynamic":
+    #     res = transform_to_16_9(max_width, max_height)
+    #     return f"{res[0]}x{res[1]}"
 
-    # If all videos are larger than the largest standard resolution, use the largest
-    return f"{standard_resolutions[0][0]}x{standard_resolutions[0][1]}"
+    elif target_option == "dynamic":
+        return f"{max_width}x{max_height}"
+
+    elif target_option == "average":
+        resolutions = [[info['width'], info['height']] for info in video_info]
+        avg = average_resolution_16_9(resolutions)
+        print(avg)
+        return f"{avg[0]}x{avg[1]}"
+
+    elif target_option == "dynamic_old":
+        # For dynamic option
+        max_width = max(info["width"] for info in video_info)
+        print(f"Max video width is {max_width}")
+        max_height = max(info["height"] for info in video_info)
+        print(f"Max video height is {max_height}")
+
+        # Define standard 16:9 resolutions
+        standard_resolutions = [(1920, 1080), (1280, 720), (854, 480), (640, 360)]
+
+        # Find the smallest standard resolution that's larger than or equal to both max dimensions
+        for width, height in standard_resolutions:
+            if (
+                width >= max_width
+                and width >= max_height
+                and height >= max_width
+                and height >= max_height
+            ):
+                return f"{width}x{height}"
+
+        # If all videos are larger than the largest standard resolution, use the largest
+        return f"{standard_resolutions[0][0]}x{standard_resolutions[0][1]}"
 
 
 

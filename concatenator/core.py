@@ -26,30 +26,38 @@ class VideoConcatenator:
             valid_input_files = self._check_input_files()
             if not valid_input_files:
                 raise VideoProcessingError("No valid input files found")
-            
+
             video_info = analyze_videos(valid_input_files)
+            print("Analyzing videos")
+            print(video_info)
             if not video_info:
-                raise VideoProcessingError("No valid video streams found in input files")
-            
-            output_resolution = determine_output_resolution(video_info, self.output_option)
-            
-            if self.output_option == 'dynamic':
-                width, height = map(int, output_resolution.split('x'))
+                raise VideoProcessingError(
+                    "No valid video streams found in input files"
+                )
+
+            output_resolution = determine_output_resolution(
+                video_info, self.output_option
+            )
+            print(f"Output resolution: {output_resolution}")
+
+            if self.output_option == "dynamic":
+                width, height = map(int, output_resolution.split("x"))
                 output_params = {
-                    'width': width,
-                    'height': height,
-                    'frame_rate': OUTPUT_OPTIONS['dynamic']['frame_rate'],
-                    'video_bitrate': f"{width * height // 1000}k",  # Adjust bitrate based on resolution
-                    'audio_bitrate': OUTPUT_OPTIONS['dynamic']['audio_bitrate'],
-                    'sample_rate': OUTPUT_OPTIONS['dynamic']['sample_rate']
+                    "width": width,
+                    "height": height,
+                    "frame_rate": OUTPUT_OPTIONS["dynamic"]["frame_rate"],
+                    "video_bitrate": f"{width * height // 1000}k",  # Adjust bitrate based on resolution
+                    "audio_bitrate": OUTPUT_OPTIONS["dynamic"]["audio_bitrate"],
+                    "sample_rate": OUTPUT_OPTIONS["dynamic"]["sample_rate"],
                 }
             else:
                 output_params = OUTPUT_OPTIONS[self.output_option]
+            print(f"Output params: {output_params}")
 
             normalized_files = self._normalize_videos(video_info, output_params)
             if not normalized_files:
                 raise VideoProcessingError("No videos were successfully normalized")
-            
+
             print(f"Concatenating {len(normalized_files)} normalized videos...")
             self._concatenate_videos(normalized_files, output_params)
         except Exception as e:
@@ -74,21 +82,38 @@ class VideoConcatenator:
         normalized_files = []
         failed_files = []
         for input_file in tqdm(video_info, desc="Normalizing videos"):
-            normalized_file = normalize_video(input_file['file'], output_params, self.ffmpeg)
-            if normalized_file:
-                normalized_files.append(normalized_file)
-            else:
-                failed_files.append(input_file['file'])
-        
+            try:
+                normalized_file = normalize_video(
+                    input_file["file"], output_params, self.ffmpeg
+                )
+                if normalized_file:
+                    normalized_files.append(normalized_file)
+                else:
+                    failed_files.append(input_file["file"])
+            except Exception as e:
+                print(f"Unexpected error normalizing {input_file['file']}:")
+                print(str(e))
+                failed_files.append(input_file["file"])
+
         if failed_files:
             print(f"Warning: Failed to normalize {len(failed_files)} file(s):")
             for file in failed_files:
                 print(f"  - {file}")
-        
+
         if not normalized_files:
-            raise VideoProcessingError("All video normalizations failed")
-        
+            raise VideoProcessingError(
+                "All video normalizations failed. Please check the error messages above for details."
+            )
+
         return normalized_files
 
     def _concatenate_videos(self, normalized_files, output_params):
-        self.ffmpeg.concatenate(normalized_files, self.output_file, output_params)
+        try:
+            print("Concatenating videos...")
+            self.ffmpeg.concatenate(normalized_files, self.output_file, output_params)
+        except FFmpegError as e:
+            print(f"Error during video concatenation:")
+            print(str(e))
+            raise VideoProcessingError(
+                "Video concatenation failed. Please check the error messages above for details."
+            )
