@@ -59,6 +59,11 @@ def transform_to_16_9(width, height):
     return target_width, height
 
 
+def determine_output_bit_rate(video_info, target_option):
+    if target_option == 'dynamic':
+        return max([br['bit_rate'] for br in video_info])
+
+
 def determine_output_resolution(video_info, target_option):
     max_width = max(info["width"] for info in video_info)
     print(f"Max video width is {max_width}")
