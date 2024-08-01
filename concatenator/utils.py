@@ -3,6 +3,7 @@ from .ffmpeg_wrapper import FFmpegWrapper
 from .exceptions import FFmpegError
 import shutil
 import tempfile
+import math
 
 # Add these at the top of the file
 temp_dir = None
@@ -58,20 +59,74 @@ def transform_to_16_9(width, height):
     target_width = (target_width + 1) & ~1
     return target_width, height
 
+def percentile(data, p):
+    """Calculate the p-th percentile of a list of numbers."""
+    sorted_data = sorted(data)
+    k = (len(sorted_data) - 1) * p
+    f = int(k)
+    c = k - f
+    if f + 1 < len(sorted_data):
+        return sorted_data[f] * (1 - c) + sorted_data[f + 1] * c
+    return sorted_data[f]
 
 def determine_output_bit_rate(video_info, target_option):
     if target_option == 'dynamic':
-        # mbr = max([br['bit_rate'] for br in video_info])
-        # print(f"Max bit rate: {mbr}")
-        # return mbr
-
-        total_weighted_bitrate = sum(vid['bit_rate'] * vid['duration'] for vid in video_info)
-        max_bitrate = sum([vid['bit_rate'] for vid in video_info])
-        print(f"Max bitrate {max_bitrate}")
-        total_duration = sum([vid['duration'] for vid in video_info])
+        bitrates = [vid['bit_rate'] for vid in video_info]
+        durations = [vid['duration'] for vid in video_info]
+        
+        max_bitrate = max(bitrates)
+        min_bitrate = min(bitrates)
+        
+        total_weighted_bitrate = sum(br * dur for br, dur in zip(bitrates, durations))
+        total_duration = sum(durations)
         weighted_average_bitrate = total_weighted_bitrate / total_duration
+
+        print('\n'.join(str(x) for x in sorted(bitrates)))
+        
+        print(f"Max bitrate: {max_bitrate}")
+        print(f"Min bitrate: {min_bitrate}")
         print(f"Weighted average bitrate: {weighted_average_bitrate}")
-        return weighted_average_bitrate
+        
+        # Option 1: Percentile-based approach (e.g., 75th percentile)
+        percentile_75 = percentile(bitrates, 0.75)
+        
+        # Option 2: Scaling the weighted average
+        scale_factor = 2  # Adjust this factor as needed
+        scaled_average = weighted_average_bitrate * scale_factor
+        
+        # Option 3: Using a target range
+        target_min = 4_000_000
+        target_max = 6_000_000
+        
+        if scaled_average < target_min:
+            final_bitrate = target_min
+        elif scaled_average > target_max:
+            final_bitrate = target_max
+        else:
+            final_bitrate = scaled_average
+        
+        print(f"75th percentile bitrate: {percentile_75}")
+        print(f"Scaled average bitrate: {scaled_average}")
+        print(f"Final bitrate (within target range): {final_bitrate}")
+        
+        return percentile_75
+
+# def determine_output_bit_rate(video_info, target_option):
+#     if target_option == 'dynamic':
+#         # mbr = max([br['bit_rate'] for br in video_info])
+#         # print(f"Max bit rate: {mbr}")
+#         # return mbr
+#
+#         total_weighted_bitrate = sum(vid['bit_rate'] * vid['duration'] for vid in video_info)
+#         max_bitrate = max([vid['bit_rate'] for vid in video_info])
+#         print(f"Max bitrate {max_bitrate}")
+#         min_bitrate = min([vid['bit_rate'] for vid in video_info])
+#         print(f"Min bitrate {min_bitrate}")
+#
+#         total_duration = sum([vid['duration'] for vid in video_info])
+#         weighted_average_bitrate = total_weighted_bitrate / total_duration
+#         print(f"Weighted average bitrate: {weighted_average_bitrate}")
+#         return weighted_average_bitrate
 
 
 def determine_output_resolution(video_info, target_option):
@@ -163,7 +218,7 @@ def cleanup_temp_directory():
 
 def sort_videos_by_orientation(input_directory):
     ffmpeg = FFmpegWrapper()
-    
+
     # Create directories for horizontal and vertical videos
     horizontal_dir = os.path.join(input_directory, 'horizontal')
     vertical_dir = os.path.join(input_directory, 'vertical')
@@ -180,17 +235,17 @@ def sort_videos_by_orientation(input_directory):
             # Probe the video to get its dimensions
             probe = ffmpeg.probe(input_path)
             video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
-            
+
             if video_stream:
                 width = int(video_stream['width'])
                 height = int(video_stream['height'])
-                
+
                 # Determine orientation and move the file
                 if width >= height:
                     destination = os.path.join(horizontal_dir, video_file)
                 else:
                     destination = os.path.join(vertical_dir, video_file)
-                
+
                 shutil.move(input_path, destination)
                 print(f"Moved {video_file} to {'horizontal' if width >= height else 'vertical'} folder")
             else:
@@ -204,3 +259,110 @@ def sort_videos_by_orientation(input_directory):
     print(f"\nSorting complete:")
     print(f"Horizontal videos: {horizontal_count}")
     print(f"Vertical videos: {vertical_count}")
+
+
+def sort_videos_by_bitrate(input_directory):
+    ffmpeg = FFmpegWrapper()
+    
+    # Create directories for bitrate categories
+    bitrates = ['high', 'medium', 'low']
+    for bitrate in bitrates:
+        os.makedirs(os.path.join(input_directory, bitrate), exist_ok=True)
+
+    # Get all video files in the input directory
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv')
+    video_files = [f for f in os.listdir(input_directory) if f.lower().endswith(video_extensions)]
+
+    # First pass: calculate min and max bitrates
+    min_bitrate = float('inf')
+    max_bitrate = 0
+    bitrate_sum = 0
+    valid_video_count = 0
+
+    for video_file in video_files:
+        input_path = os.path.join(input_directory, video_file)
+        try:
+            probe = ffmpeg.probe(input_path)
+            video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+            
+            if video_stream and 'bit_rate' in video_stream:
+                bitrate = int(video_stream['bit_rate'])
+                min_bitrate = min(min_bitrate, bitrate)
+                max_bitrate = max(max_bitrate, bitrate)
+                bitrate_sum += bitrate
+                valid_video_count += 1
+        except Exception as e:
+            print(f"Error processing {video_file}: {str(e)}")
+
+    if valid_video_count == 0:
+        print("No valid videos found.")
+        return
+
+    # Calculate thresholds
+    avg_bitrate = bitrate_sum / valid_video_count
+    low_threshold = min_bitrate + (avg_bitrate - min_bitrate) / 2
+    high_threshold = avg_bitrate + (max_bitrate - avg_bitrate) / 2
+
+    print(f"Max bitrate: {max_bitrate}")
+    print(f"Min bitrate: {min_bitrate}")
+    print(f"Bitrate thresholds: Low < {low_threshold:.0f}, Medium < {high_threshold:.0f}, High >= {high_threshold:.0f}")
+
+    # Second pass: sort videos
+    for video_file in video_files:
+        input_path = os.path.join(input_directory, video_file)
+        try:
+            probe = ffmpeg.probe(input_path)
+            video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+            
+            if video_stream:
+                bitrate = int(video_stream.get('bit_rate', 0))
+                
+                # Determine bitrate category
+                if bitrate >= high_threshold:
+                    bitrate_category = 'high'
+                elif bitrate >= low_threshold:
+                    bitrate_category = 'medium'
+                else:
+                    bitrate_category = 'low'
+                
+                # Move the file to the appropriate folder
+                destination = os.path.join(input_directory, bitrate_category, video_file)
+                shutil.move(input_path, destination)
+                print(f"Moved {video_file} to {bitrate_category} folder")
+            else:
+                print(f"Warning: No video stream found in {video_file}")
+        except Exception as e:
+            print(f"Error processing {video_file}: {str(e)}")
+
+    # Print summary
+    for bitrate in bitrates:
+        count = len(os.listdir(os.path.join(input_directory, bitrate)))
+        print(f"{bitrate.capitalize()} bitrate videos: {count}")
+
+def split_files_into_folders(input_directory, files_per_folder=100):
+    # Get all video files in the input directory
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv')
+    video_files = [f for f in os.listdir(input_directory) if f.lower().endswith(video_extensions)]
+    
+    total_files = len(video_files)
+    
+    if total_files <= files_per_folder:
+        print(f"Total files ({total_files}) is not more than {files_per_folder}. No splitting required.")
+        return
+    
+    num_folders = math.ceil(total_files / files_per_folder)
+    
+    for i in range(1, num_folders + 1):
+        folder_name = str(i)
+        os.makedirs(os.path.join(input_directory, folder_name), exist_ok=True)
+    
+    for index, video_file in enumerate(video_files):
+        source_path = os.path.join(input_directory, video_file)
+        folder_number = (index // files_per_folder) + 1
+        destination_folder = os.path.join(input_directory, str(folder_number))
+        destination_path = os.path.join(destination_folder, video_file)
+        
+        shutil.move(source_path, destination_path)
+        print(f"Moved {video_file} to folder {folder_number}")
+    
+    print(f"Split {total_files} files into {num_folders} folders.")

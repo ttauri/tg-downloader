@@ -9,7 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
-from concatenator.utils import cleanup_temp_directory, sort_videos_by_orientation
+from concatenator.utils import cleanup_temp_directory, sort_videos_by_orientation, sort_videos_by_bitrate, split_files_into_folders
 from concatenator.core import VideoConcatenator
 
 def main():
@@ -29,11 +29,18 @@ def main():
         default="mp4,avi,mov,mkv",
         help="Comma-separated list of video file extensions to process (default: mp4,avi,mov,mkv)",
     )
-    parser.add_argument("--sort", action="store_true", help="Sort videos by orientation before processing")
+    parser.add_argument("--sort", choices=['bitrate', 'split', 'orientation'], help="Sort videos by bitrate or split into folders")
 
     args = parser.parse_args()
-
-    if args.sort:
+    if args.sort == 'bitrate':
+        print("Sorting videos by bitrate...")
+        sort_videos_by_bitrate(args.input_directory)
+        print("Sorting complete. Videos are now sorted into 'high', 'medium', and 'low' bitrate folders.")
+    elif args.sort == 'split':
+        print(f"Splitting files into folders with 100 files per folder...")
+        split_files_into_folders(args.input_directory, 100)
+        print("Splitting complete.")
+    elif args.sort == 'orientation':
         print("Sorting videos by orientation...")
         sort_videos_by_orientation(args.input_directory)
         print("Sorting complete. Videos are now in 'horizontal' and 'vertical' subdirectories.")
