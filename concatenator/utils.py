@@ -366,3 +366,88 @@ def split_files_into_folders(input_directory, files_per_folder=100):
         print(f"Moved {video_file} to folder {folder_number}")
     
     print(f"Split {total_files} files into {num_folders} folders.")
+
+
+def get_video_info(input_directory):
+    ffmpeg = FFmpegWrapper()
+    
+    # Get all video files in the input directory
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv')
+    video_files = [f for f in os.listdir(input_directory) if f.lower().endswith(video_extensions)]
+    
+    total_duration = 0
+    total_size = 0
+    min_bitrate = float('inf')
+    max_bitrate = 0
+    total_bitrate = 0
+    resolutions = {}
+    
+    video_info = []
+    
+    for video_file in video_files:
+        file_path = os.path.join(input_directory, video_file)
+        file_size = os.path.getsize(file_path)
+        total_size += file_size
+        
+        try:
+            probe = ffmpeg.probe(file_path)
+            video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+            
+            if video_stream:
+                duration = float(probe['format']['duration'])
+                total_duration += duration
+                
+                bitrate = int(video_stream.get('bit_rate', probe['format'].get('bit_rate', 0)))
+                total_bitrate += bitrate
+                min_bitrate = min(min_bitrate, bitrate)
+                max_bitrate = max(max_bitrate, bitrate)
+                
+                width = int(video_stream['width'])
+                height = int(video_stream['height'])
+                resolution = f"{width}x{height}"
+                resolutions[resolution] = resolutions.get(resolution, 0) + 1
+                
+                video_info.append({
+                    'file': video_file,
+                    'duration': duration,
+                    'size': file_size,
+                    'bitrate': bitrate,
+                    'resolution': resolution
+                })
+        except Exception as e:
+            print(f"Error processing {video_file}: {str(e)}")
+    
+    num_videos = len(video_info)
+    
+    summary = {
+        'total_videos': num_videos,
+        'total_duration': total_duration,
+        'total_size': total_size,
+        'avg_bitrate': total_bitrate / num_videos if num_videos > 0 else 0,
+        'min_bitrate': min_bitrate if min_bitrate != float('inf') else 0,
+        'max_bitrate': max_bitrate,
+        'resolutions': resolutions
+    }
+    
+    return video_info, summary
+
+def format_duration(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = int(seconds % 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+def format_size(size_bytes):
+    # Convert bytes to MB or GB
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.2f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.2f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+def format_bitrate(bitrate):
+    if bitrate < 1000000:
+        return f"{bitrate / 1000:.2f} Kbps"
+    else:
+        return f"{bitrate / 1000000:.2f} Mbps"
