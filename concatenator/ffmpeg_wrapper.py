@@ -10,7 +10,7 @@ class FFmpegWrapper:
     def _is_invalid_mp4_error(self, stderr):
         return "moov atom not found" in stderr or "Invalid data found when processing input" in stderr
 
-    def probe(self, input_file):
+    def probe(self, input_file) -> Dict:
         cmd = ['ffprobe', '-v', 'error', '-show_format', '-show_streams', '-print_format', 'json', input_file]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
