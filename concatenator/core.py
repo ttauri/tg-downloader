@@ -39,7 +39,8 @@ class VideoConcatenator:
             output_resolution = determine_output_resolution(
                 video_info, self.output_option
             )
-            output_bitrate = determine_output_bit_rate(video_info, self.output_option)
+            # Comment due to change in bitrate calculation
+            # output_bitrate = determine_output_bit_rate(video_info, self.output_option)
             print(f"Output resolution: {output_resolution}")
 
             if self.output_option == "dynamic":
@@ -48,8 +49,8 @@ class VideoConcatenator:
                     "width": width,
                     "height": height,
                     "frame_rate": OUTPUT_OPTIONS["dynamic"]["frame_rate"],
-                    # "video_bitrate": f"{width * height // 1000}k",  # Adjust bitrate based on resolution
-                    "video_bitrate": f"{output_bitrate}",
+                    "video_bitrate": f"{width * height // 1000}k",  # Adjust bitrate based on resolution
+                    # "video_bitrate": f"{output_bitrate}",
                     "audio_bitrate": OUTPUT_OPTIONS["dynamic"]["audio_bitrate"],
                     "sample_rate": OUTPUT_OPTIONS["dynamic"]["sample_rate"],
                 }
