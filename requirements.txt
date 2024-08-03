@@ -7,3 +7,4 @@ telethon
 jinja2
 aiofiles
 ipdb
+tabulate

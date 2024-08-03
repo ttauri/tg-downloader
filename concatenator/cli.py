@@ -3,6 +3,7 @@ import sys
 import os
 import glob
 from tqdm import tqdm
+from tabulate import tabulate
 
 # Add the parent directory of 'concatenator' to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -40,16 +41,29 @@ def main():
         print("Analyzing video files...")
         video_info, summary = get_video_info(args.input_directory)
         
-        print("\nVideo File Information:")
-        for info in video_info:
-            print(f"File: {info['file']}")
-            print(f"  Duration: {format_duration(info['duration'])}")
-            print(f"  Size: {format_size(info['size'])}")
-            print(f"  Bitrate: {format_bitrate(info['bitrate'])}")
-            print(f"  Resolution: {info['resolution']}")
-            print()
+        # Prepare data for the table
+        table_data = [
+            [
+                info['file'],
+                format_duration(info['duration']),
+                format_size(info['size']),
+                f"{info['bitrate']} ({(format_bitrate(info['bitrate']))})",
+                f"{info['optimal_bitrate']} ({(format_bitrate(info['optimal_bitrate']))})",
+                info['frame_rate'],
+                info['resolution']
+            ]
+            for info in video_info
+        ]
         
-        print("Summary:")
+        # Sort the table data by size (descending order)
+        table_data.sort(key=lambda x: x[2], reverse=True)
+        
+        # Print the table
+        headers = ["File", "Duration", "Size", "Bitrate", "Optimal Bitrate", "FPS", "Resolution"]
+        print("\nVideo File Information:")
+        print(tabulate(table_data, headers=headers, tablefmt="grid"))
+        
+        print("\nSummary:")
         print(f"Total videos: {summary['total_videos']}")
         print(f"Total duration: {format_duration(summary['total_duration'])}")
         print(f"Total size: {format_size(summary['total_size'])}")
@@ -59,8 +73,8 @@ def main():
         print("Resolutions:")
         for resolution, count in summary['resolutions'].items():
             print(f"  {resolution}: {count}")
+        
         return
-
     if args.sort == 'bitrate':
         print("Sorting videos by bitrate...")
         sort_videos_by_bitrate(args.input_directory)

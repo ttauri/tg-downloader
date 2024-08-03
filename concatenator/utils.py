@@ -20,11 +20,15 @@ def analyze_videos(input_files):
             continue
         video_stream = next((stream for stream in info['streams'] if stream['codec_type'] == 'video'), None)
         if video_stream:
+            f, r = video_stream['r_frame_rate'].split('/')
+            fr = int(int(f) / int(r))
             video_info.append({
                 'file': input_file,
                 'width': int(video_stream['width']),
                 'height': int(video_stream['height']),
                 'bit_rate': int(video_stream['bit_rate']),
+                'frame_rate': fr,
+                'optimal_bit_rate': determine_optimal_bitrate(video_stream),
                 'duration': float(video_stream['duration'])
             })
     return video_info
@@ -70,7 +74,24 @@ def percentile(data, p):
     return sorted_data[f]
 
 def determine_output_bit_rate(video_info, target_option):
+    """
+    Determines the output bit rate based on the given video information and target option.
+
+    Args:
+        video_info (list): A list of dictionaries containing video information.
+            Each dictionary should have 'bit_rate' and 'duration' keys.
+        target_option (str): The target option to determine the output bit rate.
+            Possible values are 'dynamic', 'percentile', 'scaling', and 'range'.
+
+    Returns:
+        float: The output bit rate determined based on the target option.
+
+    Raises:
+        ValueError: If the target_option is not one of the valid options.
+
+    """
     if target_option == 'dynamic':
+        # bitrates = [min(int(vid['bit_rate']), get_optimal_bitrate(vid)) for vid in video_info]
         bitrates = [vid['bit_rate'] for vid in video_info]
         durations = [vid['duration'] for vid in video_info]
         
@@ -111,23 +132,6 @@ def determine_output_bit_rate(video_info, target_option):
         
         return percentile_75
 
-# def determine_output_bit_rate(video_info, target_option):
-#     if target_option == 'dynamic':
-#         # mbr = max([br['bit_rate'] for br in video_info])
-#         # print(f"Max bit rate: {mbr}")
-#         # return mbr
-#
-#         total_weighted_bitrate = sum(vid['bit_rate'] * vid['duration'] for vid in video_info)
-#         max_bitrate = max([vid['bit_rate'] for vid in video_info])
-#         print(f"Max bitrate {max_bitrate}")
-#         min_bitrate = min([vid['bit_rate'] for vid in video_info])
-#         print(f"Min bitrate {min_bitrate}")
-#
-#         total_duration = sum([vid['duration'] for vid in video_info])
-#         weighted_average_bitrate = total_weighted_bitrate / total_duration
-#         print(f"Weighted average bitrate: {weighted_average_bitrate}")
-#         return weighted_average_bitrate
-
 
 def determine_output_resolution(video_info, target_option):
     max_width = max(info["width"] for info in video_info)
@@ -138,10 +142,6 @@ def determine_output_resolution(video_info, target_option):
     if target_option in ["1080p", "720p"]:
         return target_option
 
-    # elif target_option == "dynamic":
-    #     res = transform_to_16_9(max_width, max_height)
-    #     return f"{res[0]}x{res[1]}"
-
     elif target_option == "dynamic":
         return f"{max_width}x{max_height}"
 
@@ -150,30 +150,6 @@ def determine_output_resolution(video_info, target_option):
         avg = average_resolution_16_9(resolutions)
         print(avg)
         return f"{avg[0]}x{avg[1]}"
-
-    elif target_option == "dynamic_old":
-        # For dynamic option
-        max_width = max(info["width"] for info in video_info)
-        print(f"Max video width is {max_width}")
-        max_height = max(info["height"] for info in video_info)
-        print(f"Max video height is {max_height}")
-
-        # Define standard 16:9 resolutions
-        standard_resolutions = [(1920, 1080), (1280, 720), (854, 480), (640, 360)]
-
-        # Find the smallest standard resolution that's larger than or equal to both max dimensions
-        for width, height in standard_resolutions:
-            if (
-                width >= max_width
-                and width >= max_height
-                and height >= max_width
-                and height >= max_height
-            ):
-                return f"{width}x{height}"
-
-        # If all videos are larger than the largest standard resolution, use the largest
-        return f"{standard_resolutions[0][0]}x{standard_resolutions[0][1]}"
-
 
 
 def normalize_video(input_file, output_params, ffmpeg):
@@ -368,6 +344,16 @@ def split_files_into_folders(input_directory, files_per_folder=100):
     print(f"Split {total_files} files into {num_folders} folders.")
 
 
+def determine_optimal_bitrate(video_stream):
+    width = int(video_stream['width'])
+    height = int(video_stream['height'])
+    f, s = video_stream['r_frame_rate'].split('/')
+    frame_rate = int(f) / int(s)
+    # 0.9 is the factor for medium+ video motion.
+    optimal_bitrate = width * height * frame_rate * 0.9
+    return optimal_bitrate
+
+
 def get_video_info(input_directory):
     ffmpeg = FFmpegWrapper()
     
@@ -401,6 +387,8 @@ def get_video_info(input_directory):
                 total_bitrate += bitrate
                 min_bitrate = min(min_bitrate, bitrate)
                 max_bitrate = max(max_bitrate, bitrate)
+                fps = video_stream.get('r_frame_rate', 'Not available')
+                optimal_bitrate = get_optimal_bitrate(video_stream)
                 
                 width = int(video_stream['width'])
                 height = int(video_stream['height'])
@@ -411,6 +399,8 @@ def get_video_info(input_directory):
                     'file': video_file,
                     'duration': duration,
                     'size': file_size,
+                    'frame_rate': fps,
+                    'optimal_bitrate': optimal_bitrate,
                     'bitrate': bitrate,
                     'resolution': resolution
                 })
