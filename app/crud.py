@@ -10,7 +10,7 @@ def get_channels(db: Session):
     return db.query(Channel).all()
 
 
-def get_channel_by_id(db: Session, channel_id: str):
+def get_channel_by_id(db: Session, channel_id: int):
     return db.query(Channel).filter(Channel.channel_id == channel_id).first()
 
 
@@ -21,7 +21,9 @@ def get_subscribed_channels(db: Session):
 
 
 def get_available_channels(db: Session):
-    return db.query(Channel).filter(Channel.subscribed == False)
+    channels = db.query(Channel).filter(Channel.subscribed == False)
+    logger.info(f"Qurying available channels, got: {channels.count()} channels")
+    return channels
 
 
 def subscribe_to_channel(db: Session, channel_id: str):
@@ -41,7 +43,11 @@ def unsubscribe_to_channel(db: Session, channel_id: str):
 def create_or_update_channel(db: Session, channel: schemas.ChannelCreate):
     chan = db.query(Channel).filter(Channel.channel_id == channel.channel_id).first()
     if chan:
-        raise BaseException("Not implemented")
+        chan.channel_id = channel.channel_id
+        chan.channel_name = channel.channel_name
+        db.commit()
+        db.refresh(chan)
+        return chan
     else:
         db_channel = Channel(
             channel_id=channel.channel_id, channel_name=channel.channel_name
@@ -56,7 +62,7 @@ def get_all_media(db: Session, channel_id: str):
     return db.query(Media).filter(Media.tg_channel_id == channel_id).all()
 
 
-def get_all_not_downloaded_media(db: Session, channel_id: str, order="none"):
+def get_all_not_downloaded_media(db: Session, channel_id: int, order="none"):
     query = db.query(Media).filter(
         and_(Media.tg_channel_id == channel_id, Media.is_downloaded == False)
     )

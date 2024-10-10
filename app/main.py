@@ -54,7 +54,7 @@ async def read_root(request: Request, db: Session = Depends(get_db)):
     sub_channels = get_subscribed_channels(db)
     av_chanels = get_available_channels(db)
     for chan in av_chanels:
-        print(chan)
+        print(chan.channel_name)
     return templates.TemplateResponse(
         "index.html",
         {
