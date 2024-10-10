@@ -1,7 +1,5 @@
-from nudenet import NudeClassifier
+from nudenet import NudeDetector
 import cv2
-import os
-
 import os
 import shutil
 
@@ -12,6 +10,8 @@ allowed_labels = [
     "FEMALE_GENITALIA_EXPOSED",
     "ANUS_EXPOSED",
     "MALE_GENITALIA_EXPOSED",
+    "MALE_BREAST_EXPOSED",
+    "FACE_MALE"
 ]
 
 def classify_video(video_path, classifier, threshold=0.5, num_frames=100):
@@ -43,9 +43,9 @@ def classify_video(video_path, classifier, threshold=0.5, num_frames=100):
         # Remove temporary image
         os.remove(temp_image_path)
         # Print progress
-        if (i + 1) % (num_frames // 10) == 0 or i + 1 == num_frames:
-            progress = ((i + 1) / num_frames) * 100
-            print(f"Progress: {progress:.0f}%")
+        # if (i + 1) % (num_frames // 4) == 0 or i + 1 == num_frames:
+        #     progress = ((i + 1) / num_frames) * 100
+        #     print(f"Progress: {progress:.0f}%")
     cap.release()
     # Calculate percentages
     for label in classifications:
@@ -53,18 +53,18 @@ def classify_video(video_path, classifier, threshold=0.5, num_frames=100):
     print("Processing complete!")
     return classifications
 
-def process_videos(directory, threshold=0.5, sample_rate=10):
-    classifier = NudeClassifier()
-
-    for filename in os.listdir(directory):
-        if filename.endswith(('.mp4', '.avi', '.mov')):  # Add more video formats if needed
-            video_path = os.path.join(directory, filename)
-            classifications = classify_video(video_path, classifier, threshold, sample_rate)
-
-            print(f"Classifications for {filename}:")
-            for label, percentage in classifications.items():
-                print(f"  {label}: {percentage:.2f}%")
-            print()
+# def process_videos(directory, threshold=0.5, sample_rate=10):
+#     classifier = NudeClassifier()
+#
+#     for filename in os.listdir(directory):
+#         if filename.endswith(('.mp4', '.avi', '.mov')):  # Add more video formats if needed
+#             video_path = os.path.join(directory, filename)
+#             classifications = classify_video(video_path, classifier, threshold, sample_rate)
+#
+#             print(f"Classifications for {filename}:")
+#             for label, percentage in classifications.items():
+#                 print(f"  {label}: {percentage:.2f}%")
+#             print()
 
 def matches_rule(classifications, rule):
     for label, threshold in rule['thresholds'].items():
@@ -75,11 +75,14 @@ def matches_rule(classifications, rule):
 def sort_videos_by_rules(video_directory, output_directory, classifier, rules, num_frames=100):
     # Create output directory if it doesn't exist
     os.makedirs(output_directory, exist_ok=True)
-    for filename in os.listdir(video_directory):
+    files = os.listdir(video_directory)
+    for i, filename in enumerate(files):
+        print(f"Processing {i} of {len(files)}")
         if filename.endswith(('.mp4', '.avi', '.mov')):  # Add more video formats if needed
             video_path = os.path.join(video_directory, filename)
             # Classify the video
             classifications = classify_video(video_path, classifier, num_frames=num_frames)
+            print(classifications)
             # Check if the video matches any rule
             for rule in rules:
                 if matches_rule(classifications, rule):
@@ -91,7 +94,9 @@ def sort_videos_by_rules(video_directory, output_directory, classifier, rules, n
                     print(f"Moved {filename} to {rule['dir_name']}")
                     break
             else:
-                import pdb; pdb.set_trace()
+                rule_dir = os.path.join(output_directory, 'out_of_rules')
+                os.makedirs(rule_dir, exist_ok=True)
+                shutil.move(video_path, os.path.join(rule_dir, filename))
                 print(f"No matching rule for {filename}")
 
 rules = [
@@ -112,3 +117,9 @@ rules = [
 
 video_directory = '/Users/ceti/Downloads/vids'
 output_directory = '/Users/ceti/Downloads/vids/sorted'
+def main():
+    detector = NudeDetector()
+    sort_videos_by_rules(video_directory, output_directory, detector, rules)
+
+if __name__ == '__main__':
+    main()
