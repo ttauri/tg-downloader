@@ -1,5 +1,6 @@
 import subprocess
 import json
+from typing import Dict
 from .exceptions import FFmpegError
 from tqdm import tqdm
 import shlex
