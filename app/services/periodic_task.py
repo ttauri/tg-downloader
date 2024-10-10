@@ -2,9 +2,11 @@ import os
 
 from app import schemas
 from app.config import settings
+from app.services.helper_functions import sanitize_dirname
 from app.crud import (
     create_media,
     get_subscribed_channels,
+    get_channel_by_id,
     get_all_not_downloaded_media,
 )
 from app.database import SessionLocal
@@ -13,7 +15,7 @@ from app.logging_conf import logger
 
 
 async def check_for_new_messages():
-    print("QUerying MESSAGES")
+    print("Querying messages")
     async with client:
         db = SessionLocal()
         channels = get_subscribed_channels(db)
@@ -33,6 +35,7 @@ async def check_for_new_messages():
                         size=media_size,
                         is_downloaded=True,
                         channel_id=channel.channel_id,
+                        filename=""
                     )
                     print(new_media)
                     create_media(db=db, media=new_media)
@@ -42,6 +45,8 @@ async def download_media_from_channel(channel_id: int):
     db = SessionLocal()
     sorting_type = settings.sorting_type
     logger.info(f"Using {sorting_type} sorting fror channel media")
+    channel = get_channel_by_id(db=db, channel_id=channel_id)
+    channel_folder = sanitize_dirname(channel.channel_name)
     media = get_all_not_downloaded_media(db, channel_id, order=sorting_type)
     async with client:
         for m in media:
@@ -50,7 +55,7 @@ async def download_media_from_channel(channel_id: int):
                 f"Downloading media ID:{m.id}, Size:{round(m.size / (1024 * 1024), 3)}MB"
             )
             media_path = await download_media_from_message(
-                message, f"{settings.media_download_path}/{str(m.tg_channel_id)[4:]}/"
+                message, f"{settings.media_download_path}/{channel_folder}/"
             )
             filename = media_path.split("/")[-1]
             logger.info(f"{media_path} finished. Filename: {filename}")
@@ -72,14 +77,15 @@ async def fetch_messages_form_channel(channel_id: str):
                 continue
             try:
                 new_media = schemas.MediaCreate(
-                    tg_message_id=message.id,
                     tg_channel_id=channel_id,
+                    tg_message_id=message.id,
                     media_type=message.document.mime_type,
                     size=message.document.size,
                     is_downloaded=False,
+                    filename="",
                 )
-                print(new_media)
-                # logger.info('Media record created')
+                # print(new_media)
                 create_media(db=db, media=new_media)
+                logger.info(f'Media record created ID:{new_media.tg_message_id} TYPE:{new_media.media_type}')
             except BaseException as e:
                 logger.critical(f"Unable to save media, {e}")
