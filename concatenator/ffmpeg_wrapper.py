@@ -30,7 +30,7 @@ class FFmpegWrapper:
 
 
     def check_video(self, input_file):
-        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets', 
+        cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets',
                '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', input_file]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -74,21 +74,6 @@ class FFmpegWrapper:
                 '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100'
             ])
 
-        # cmd.extend([
-        #     '-filter_complex', f'[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v]',
-        #     '-map', '[v]',
-        #     '-map', '0:a' if has_audio else '1:a',
-        #     '-c:v', 'libx264',
-        #     '-r', str(frame_rate),
-        #     '-b:v', video_bitrate,
-        #     '-c:a', 'aac',
-        #     '-b:a', audio_bitrate,
-        #     '-ar', str(sample_rate),
-        #     '-shortest',
-        #     '-y',
-        #     output_file
-        # ])
-
         cmd.extend([
             '-filter_complex', f'[0:v]scale={width}:{height}:force_original_aspect_ratio=1,setsar=1,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2[v]',
             '-map', '[v]',
@@ -105,7 +90,7 @@ class FFmpegWrapper:
         ])
 
         process = subprocess.Popen(cmd, stderr=subprocess.PIPE, universal_newlines=True)
-        
+
         if total_frames:
             pbar = tqdm(total=total_frames, unit='frames', desc=f"Processing {input_file}")
         else:
@@ -134,9 +119,9 @@ class FFmpegWrapper:
         input_args = []
         for file in input_files:
             input_args.extend(['-i', file])
-        
+
         filter_complex = f"concat=n={len(input_files)}:v=1:a=1[outv][outa]"
-        
+
         cmd = [
             'ffmpeg',
             *input_args,
@@ -154,7 +139,7 @@ class FFmpegWrapper:
         ]
 
         process = subprocess.Popen(cmd, stderr=subprocess.PIPE, universal_newlines=True)
-        
+
         total_duration = sum(float(self.probe(f)['format']['duration']) for f in input_files)
         pbar = tqdm(total=100, unit='%', desc="Concatenating videos")
 
@@ -172,6 +157,3 @@ class FFmpegWrapper:
         process.wait()
         if process.returncode != 0:
             raise FFmpegError(f"FFmpeg concatenation failed. Error output:\n{error_output}")
-
-
-
