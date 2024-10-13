@@ -10,7 +10,7 @@ def get_channels(db: Session):
     return db.query(Channel).all()
 
 
-def get_channel_by_id(db: Session, channel_id: int):
+def get_channel_by_id(db: Session, channel_id: str):
     return db.query(Channel).filter(Channel.channel_id == channel_id).first()
 
 
