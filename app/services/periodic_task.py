@@ -49,10 +49,10 @@ async def download_media_from_channel(channel_id: int):
     channel_folder = sanitize_dirname(channel.channel_name)
     media = get_all_not_downloaded_media(db, channel_id, order=sorting_type)
     async with client:
-        for m in media:
+        for i, m in enumerate(media):
             message = await client.get_messages(int(channel_id), ids=m.tg_message_id)
             logger.info(
-                f"Downloading media ID:{m.id}, Size:{round(m.size / (1024 * 1024), 3)}MB"
+                f"Downloading media {i} of {len(media)} ID:{m.id}, Size:{round(m.size / (1024 * 1024), 3)}MB"
             )
             media_path = await download_media_from_message(
                 message, f"{settings.media_download_path}/{channel_folder}/"
