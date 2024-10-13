@@ -53,19 +53,6 @@ def classify_video(video_path, classifier, threshold=0.5, num_frames=100):
     print("Processing complete!")
     return classifications
 
-# def process_videos(directory, threshold=0.5, sample_rate=10):
-#     classifier = NudeClassifier()
-#
-#     for filename in os.listdir(directory):
-#         if filename.endswith(('.mp4', '.avi', '.mov')):  # Add more video formats if needed
-#             video_path = os.path.join(directory, filename)
-#             classifications = classify_video(video_path, classifier, threshold, sample_rate)
-#
-#             print(f"Classifications for {filename}:")
-#             for label, percentage in classifications.items():
-#                 print(f"  {label}: {percentage:.2f}%")
-#             print()
-
 def matches_rule(classifications, rule):
     for label, threshold in rule['thresholds'].items():
         if label not in classifications or classifications[label] < threshold:
@@ -81,7 +68,10 @@ def sort_videos_by_rules(video_directory, output_directory, classifier, rules, n
         if filename.endswith(('.mp4', '.avi', '.mov')):  # Add more video formats if needed
             video_path = os.path.join(video_directory, filename)
             # Classify the video
-            classifications = classify_video(video_path, classifier, num_frames=num_frames)
+            try:
+                classifications = classify_video(video_path, classifier, num_frames=num_frames)
+            except BaseException as e:
+                print(f"Unable to process {filename} E:{e}")
             print(classifications)
             # Check if the video matches any rule
             for rule in rules:
@@ -94,20 +84,20 @@ def sort_videos_by_rules(video_directory, output_directory, classifier, rules, n
                     print(f"Moved {filename} to {rule['dir_name']}")
                     break
             else:
-                rule_dir = os.path.join(output_directory, 'out_of_rules')
+                rule_dir = os.path.join(output_directory, 'unsorted')
                 os.makedirs(rule_dir, exist_ok=True)
                 shutil.move(video_path, os.path.join(rule_dir, filename))
                 print(f"No matching rule for {filename}")
 
 rules = [
     {
-        'dir_name': 'with_male',
+        'dir_name': 'couple',
         'thresholds': {
             'MALE_GENITALIA_EXPOSED': 10,
         }
     },
     {
-        'dir_name': 'without_male',
+        'dir_name': 'wo_male',
         'thresholds': {
             'FEMALE_GENITALIA_EXPOSED': 20,
         }
@@ -115,8 +105,8 @@ rules = [
     # Add more rules as needed
 ]
 
-video_directory = '/Users/ceti/Downloads/vids'
-output_directory = '/Users/ceti/Downloads/vids/sorted'
+video_directory = '/Volumes/SharedFolder/media/Anal_penetration'
+output_directory = '/Volumes/SharedFolder/media/Anal_penetration/sorted'
 def main():
     detector = NudeDetector()
     sort_videos_by_rules(video_directory, output_directory, detector, rules)
