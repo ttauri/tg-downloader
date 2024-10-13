@@ -105,8 +105,8 @@ rules = [
     # Add more rules as needed
 ]
 
-video_directory = '/Volumes/SharedFolder/media/Anal_penetration'
-output_directory = '/Volumes/SharedFolder/media/Anal_penetration/sorted'
+video_directory = ''
+output_directory = '/sorted'
 def main():
     detector = NudeDetector()
     sort_videos_by_rules(video_directory, output_directory, detector, rules)
