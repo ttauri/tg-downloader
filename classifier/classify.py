@@ -42,15 +42,10 @@ def classify_video(video_path, classifier, threshold=0.5, num_frames=100):
                 classifications[label] = classifications.get(label, 0) + 1
         # Remove temporary image
         os.remove(temp_image_path)
-        # Print progress
-        # if (i + 1) % (num_frames // 4) == 0 or i + 1 == num_frames:
-        #     progress = ((i + 1) / num_frames) * 100
-        #     print(f"Progress: {progress:.0f}%")
     cap.release()
     # Calculate percentages
     for label in classifications:
         classifications[label] = (classifications[label] / num_frames) * 100
-    print("Processing complete!")
     return classifications
 
 def matches_rule(classifications, rule):
@@ -91,13 +86,13 @@ def sort_videos_by_rules(video_directory, output_directory, classifier, rules, n
 
 rules = [
     {
-        'dir_name': 'couple',
+        'dir_name': 'w_mle',
         'thresholds': {
             'MALE_GENITALIA_EXPOSED': 10,
         }
     },
     {
-        'dir_name': 'wo_male',
+        'dir_name': 'wo_mle',
         'thresholds': {
             'FEMALE_GENITALIA_EXPOSED': 20,
         }
