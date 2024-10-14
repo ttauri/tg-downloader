@@ -89,6 +89,7 @@ rules = [
         'dir_name': 'w_mle',
         'thresholds': {
             'MALE_GENITALIA_EXPOSED': 5,
+            'FEMALE_GENITALIA_EXPOSED': 5,
         }
     },
     {
