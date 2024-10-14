@@ -88,20 +88,27 @@ rules = [
     {
         'dir_name': 'w_mle',
         'thresholds': {
-            'MALE_GENITALIA_EXPOSED': 10,
+            'MALE_GENITALIA_EXPOSED': 5,
+        }
+    },
+    {
+        'dir_name': 'wo_mle_exp',
+        'thresholds': {
+            'FEMALE_GENITALIA_EXPOSED': 20,
         }
     },
     {
         'dir_name': 'wo_mle',
         'thresholds': {
-            'FEMALE_GENITALIA_EXPOSED': 20,
+            'FEMALE_GENITALIA_EXPOSED': 5,
         }
     },
     # Add more rules as needed
 ]
 
-video_directory = ''
-output_directory = '/sorted'
+video_directory = '/Volumes/SharedFolder/media//vertical'
+output_directory = '/Volumes/SharedFolder/media//vertical/classified'
+
 def main():
     detector = NudeDetector()
     sort_videos_by_rules(video_directory, output_directory, detector, rules)
