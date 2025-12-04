@@ -1,7 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>{{channel.channel_name}} Details </h2>
+<h2>{{ channel.channel_name or '[Unnamed Channel]' }} Details</h2>
+<div class="channel-meta">
+    <span class="meta-item">ID: {{ channel.channel_id }}</span>
+    {% if channel.last_synced %}
+    <span class="meta-item">Last synced: {{ channel.last_synced.strftime('%Y-%m-%d %H:%M') }}</span>
+    {% else %}
+    <span class="meta-item">Last synced: Never</span>
+    {% endif %}
+</div>
 
 <!-- Progress Panel -->
 <div id="progress-panel" class="progress-panel hidden">

@@ -11,12 +11,19 @@
         <h1>Telegram Downloader</h1>
         <nav>
             <a href="/">Home</a>
-            <button type="button" class="action-btn" onclick="window.location.href='/update_channels_list/'">Update channels list</button>
+            <button type="button" class="action-btn" id="update-channels-btn" onclick="updateChannelsList(this)">Update channels list</button>
         </nav>
     </header>
     <main>
         {% block content %}{% endblock %}
     </main>
+    <script>
+    function updateChannelsList(btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-spinner"></span> Updating...';
+        window.location.href = '/update_channels_list/';
+    }
+    </script>
 </body>
 </html>
 

@@ -1,48 +1,60 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Subscribed Channels</h2>
+{% if sub_channels %}
 <table class="channel-table">
     <thead>
         <tr>
             <th>Channel Name</th>
             <th>Channel ID</th>
-            <th>Unsubscribe</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody>
         {% for channel in sub_channels %}
         <tr>
-            <td><a href="/channel_details/?channel_id={{ channel.channel_id }}">{{ channel.channel_name }}</a></td>
+            <td><a href="/channel_details/?channel_id={{ channel.channel_id }}">{{ channel.channel_name or '[Unnamed Channel]' }}</a></td>
             <td>{{ channel.channel_id }}</td>
-            <td><form action="/unsubscribe_to_channel/" method="post">
-                <input type="hidden" id="channel_id" name="channel_id" value="{{ channel.channel_id }}">
-                <button type="submit">Unsubscribe</button>
-            </form></td>
+            <td>
+                <form action="/unsubscribe_to_channel/" method="post" style="margin: 0;">
+                    <input type="hidden" name="channel_id" value="{{ channel.channel_id }}">
+                    <button type="submit" class="action-btn small">Unsubscribe</button>
+                </form>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% else %}
+<p class="empty-state">No subscribed channels. Subscribe to channels below or update the channel list.</p>
+{% endif %}
 
 <h2>Available Channels</h2>
+{% if available_channels %}
 <table class="channel-table">
     <thead>
         <tr>
-            <th>Name</th>
-            <th>ID</th>
-            <th>Subscribe</th>
+            <th>Channel Name</th>
+            <th>Channel ID</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody>
         {% for chan in available_channels %}
         <tr>
-            <td>{{ chan.channel_name }}</td>
+            <td>{{ chan.channel_name or '[Unnamed Channel]' }}</td>
             <td>{{ chan.channel_id }}</td>
-            <td><form action="/subscribe_to_channel/" method="post">
-                <input type="hidden" id="channel_id" name="channel_id" value="{{ chan.channel_id }}">
-                <button type="submit">Subscribe</button>
-            </form></td>
+            <td>
+                <form action="/subscribe_to_channel/" method="post" style="margin: 0;">
+                    <input type="hidden" name="channel_id" value="{{ chan.channel_id }}">
+                    <button type="submit" class="action-btn small">Subscribe</button>
+                </form>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% else %}
+<p class="empty-state">No available channels. Click "Update channels list" in the header to fetch your Telegram channels.</p>
+{% endif %}
 {% endblock %}

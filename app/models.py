@@ -47,3 +47,4 @@ class Channel(Base):
     channel_id = Column(String, unique=True, index=True)
     channel_name = Column(String, unique=False, index=True)
     subscribed = Column(Boolean, default=False)
+    last_synced = Column(DateTime, nullable=True)

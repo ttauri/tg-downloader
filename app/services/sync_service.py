@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from typing import Optional
 from collections import defaultdict
 
@@ -56,6 +57,14 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
         folder_path = get_channel_folder_path(channel_name)
 
         if not os.path.exists(folder_path):
+            # Still update last_synced even if no folder
+            logger.info(f"No folder exists for channel_id={channel_id}, updating last_synced anyway")
+            channel = db.query(Channel).filter(Channel.channel_id == str(channel_id)).first()
+            logger.info(f"Channel found: {channel is not None}")
+            if channel:
+                channel.last_synced = datetime.now()
+                db.commit()
+                logger.info(f"Updated last_synced to {channel.last_synced}")
             if task:
                 await task.complete("No folder exists yet")
             return {"status": "no_folder"}
@@ -159,7 +168,15 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
                         duplicate.filename = ""
                     duplicates_deleted += 1
 
+        # Update last_synced timestamp on channel
+        channel = db.query(Channel).filter(Channel.channel_id == str(channel_id)).first()
+        logger.info(f"Updating last_synced for channel_id={channel_id}, found={channel is not None}")
+        if channel:
+            channel.last_synced = datetime.now()
+            logger.info(f"Set last_synced to {channel.last_synced}")
+
         db.commit()
+        logger.info("Committed last_synced update")
 
         result = {
             "status": "completed",
