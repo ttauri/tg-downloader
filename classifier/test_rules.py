@@ -195,8 +195,7 @@ def test_single_video(analysis: dict, rules: list, filename: str):
     video_metadata = video.get("video_metadata", {})
     if video_metadata:
         print(f"Duration: {video_metadata.get('duration', '?')}s, "
-              f"Frames analyzed: {video_metadata.get('analyzed_frames', '?')}, "
-              f"Threshold: {video_metadata.get('threshold', '?')}")
+              f"Frames analyzed: {video_metadata.get('analyzed_frames', '?')}")
         print("-" * 60)
 
     classifications = video["classifications"]

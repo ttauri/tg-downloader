@@ -17,7 +17,7 @@ HOW CLASSIFICATION WORKS
 2. DETECTION
    - Each frame is analyzed by NudeNet AI detector
    - Detector returns labels with confidence scores (0.0-1.0)
-   - Only detections above threshold (default 0.5) are counted
+   - Only detections above threshold (default 0.4) are counted
    - Each label counted once per frame (avoids >100% from multiple detections)
 
 3. PERCENTAGE CALCULATION
@@ -172,6 +172,7 @@ def save_rules(rules: List[dict], path: str):
 def classify_video(
     video_path: str,
     detector: NudeDetector,
+    threshold: float = 0.4,
     num_frames: int = 100,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     include_all_labels: bool = False,
@@ -182,6 +183,7 @@ def classify_video(
     Args:
         video_path: Path to the video file
         detector: NudeNet detector instance
+        threshold: Minimum confidence score for detections (0.0-1.0)
         num_frames: Max number of frames to analyze (adjusted for short videos)
         progress_callback: Optional callback(current_frame, total_frames)
         include_all_labels: If True, return dict with 'classifications' and 'metadata'
@@ -233,12 +235,13 @@ def classify_video(
             cv2.imwrite(temp_path, frame)
             result = detector.detect(temp_path)
 
-            # Track labels per frame (any detection counts)
+            # Track labels per frame (only above threshold)
             frame_labels = set()
 
             for detected_object in result:
                 label = detected_object["class"]
-                if label in ALLOWED_LABELS:
+                score = detected_object["score"]
+                if label in ALLOWED_LABELS and score >= threshold:
                     frame_labels.add(label)
 
             # Increment counts
