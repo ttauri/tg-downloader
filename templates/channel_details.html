@@ -7,7 +7,10 @@
 <div id="progress-panel" class="progress-panel hidden">
     <div class="progress-header">
         <span id="progress-title">Operation in progress...</span>
-        <span id="progress-status" class="status-badge">running</span>
+        <div class="progress-controls">
+            <span id="progress-status" class="status-badge">running</span>
+            <button type="button" id="stop-btn" class="stop-btn" onclick="stopTask()">Stop</button>
+        </div>
     </div>
     <div class="progress-bar-container">
         <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
@@ -15,22 +18,77 @@
     <div id="progress-message" class="progress-message">Starting...</div>
 </div>
 
+<!-- Statistics -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Videos</div>
+        <div class="stat-row">
+            <span class="stat-downloaded">{{ video_downloaded }}</span>
+            <span class="stat-separator">/</span>
+            <span class="stat-total">{{ video_count }}</span>
+        </div>
+        <div class="stat-size-row">
+            <span class="size-downloaded">{{ video_downloaded_size }}</span>
+            <span class="stat-separator">/</span>
+            <span class="size-total">{{ video_size }}</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Images</div>
+        <div class="stat-row">
+            <span class="stat-downloaded">{{ image_downloaded }}</span>
+            <span class="stat-separator">/</span>
+            <span class="stat-total">{{ image_count }}</span>
+        </div>
+        <div class="stat-size-row">
+            <span class="size-downloaded">{{ image_downloaded_size }}</span>
+            <span class="stat-separator">/</span>
+            <span class="size-total">{{ image_size }}</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Other</div>
+        <div class="stat-row">
+            <span class="stat-downloaded">{{ other_downloaded }}</span>
+            <span class="stat-separator">/</span>
+            <span class="stat-total">{{ other_count }}</span>
+        </div>
+        <div class="stat-size-row">
+            <span class="size-downloaded">{{ other_downloaded_size }}</span>
+            <span class="stat-separator">/</span>
+            <span class="size-total">{{ other_size }}</span>
+        </div>
+    </div>
+    <div class="stat-card total">
+        <div class="stat-label">Total</div>
+        <div class="stat-row">
+            <span class="stat-downloaded">{{ downloaded_media }}</span>
+            <span class="stat-separator">/</span>
+            <span class="stat-total">{{ all_media }}</span>
+        </div>
+        <div class="stat-size-row">
+            <span class="size-downloaded">{{ total_downloaded_size }}</span>
+            <span class="stat-separator">/</span>
+            <span class="size-total">{{ total_size }}</span>
+        </div>
+    </div>
+</div>
+<div class="stats-legend">
+    <span class="legend-item"><span class="legend-color downloaded"></span> Downloaded</span>
+    <span class="legend-item"><span class="legend-color total"></span> Total</span>
+</div>
+
 <table class="channel-table">
     <thead>
         <tr>
-            <th>Param</th>
-            <th>Value</th>
+            <th>Status</th>
+            <th>Count</th>
             <th>Action</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td>Channel ID</td>
-            <td>{{ channel.channel_id }}</td>
-            <td></td>
-        </tr>
-        <tr>
-            <td>Messages fetched</td>
+            <td>Fetched</td>
             <td id="all-media-count">{{ all_media }}</td>
             <td>
                 <button type="button" id="fetch-btn" class="action-btn" onclick="startFetch()">
@@ -40,7 +98,7 @@
             </td>
         </tr>
         <tr>
-            <td>Messages downloaded</td>
+            <td>Downloaded</td>
             <td id="downloaded-count">{{ downloaded_media }}</td>
             <td>
                 <button type="button" id="download-btn" class="action-btn" onclick="startDownload()">
@@ -50,16 +108,37 @@
             </td>
         </tr>
         <tr>
-            <td>Messages not downloaded</td>
+            <td>Pending</td>
             <td id="not-downloaded-count">{{ not_downloaded_media }}</td>
             <td></td>
         </tr>
     </tbody>
 </table>
 
+<div class="danger-zone">
+    <h3>Danger Zone</h3>
+    <p>This will delete all fetched media info from the database for this channel. Downloaded files will not be deleted.</p>
+    <button type="button" id="reset-btn" class="danger-btn" onclick="confirmReset()">Reset Channel Data</button>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirm-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Confirm Reset</h3>
+        <p>Are you sure you want to delete all media records for this channel?</p>
+        <p><strong>{{ all_media }}</strong> records will be deleted.</p>
+        <div class="modal-buttons">
+            <button type="button" class="action-btn" onclick="closeModal()">Cancel</button>
+            <button type="button" class="danger-btn" onclick="resetChannel()">Yes, Reset</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const channelId = "{{ channel.channel_id }}";
 let eventSource = null;
+let currentTaskId = null;
+let currentBtnId = null;
 
 function showProgress(title) {
     const panel = document.getElementById('progress-panel');
@@ -68,6 +147,7 @@ function showProgress(title) {
     document.getElementById('progress-status').className = 'status-badge running';
     document.getElementById('progress-bar').style.width = '0%';
     document.getElementById('progress-message').textContent = 'Starting...';
+    document.getElementById('stop-btn').disabled = false;
     panel.classList.remove('hidden');
 }
 
@@ -82,6 +162,7 @@ function updateProgress(data) {
 function hideProgressDelayed() {
     setTimeout(() => {
         document.getElementById('progress-panel').classList.add('hidden');
+        currentTaskId = null;
     }, 3000);
 }
 
@@ -102,6 +183,8 @@ function setButtonLoading(btnId, loading) {
 }
 
 function subscribeToProgress(taskId, btnId, title) {
+    currentTaskId = taskId;
+    currentBtnId = btnId;
     showProgress(title);
 
     eventSource = new EventSource('/task_progress/' + taskId);
@@ -110,12 +193,12 @@ function subscribeToProgress(taskId, btnId, title) {
         const data = JSON.parse(event.data);
         updateProgress(data);
 
-        if (data.status === 'completed' || data.status === 'failed') {
+        if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
             eventSource.close();
             setButtonLoading(btnId, false);
+            document.getElementById('stop-btn').disabled = true;
             hideProgressDelayed();
-            // Refresh counts after completion
-            if (data.status === 'completed') {
+            if (data.status === 'completed' || data.status === 'cancelled') {
                 setTimeout(() => location.reload(), 2000);
             }
         }
@@ -124,10 +207,24 @@ function subscribeToProgress(taskId, btnId, title) {
     eventSource.onerror = function() {
         eventSource.close();
         setButtonLoading(btnId, false);
+        document.getElementById('stop-btn').disabled = true;
         document.getElementById('progress-status').textContent = 'error';
         document.getElementById('progress-status').className = 'status-badge failed';
         hideProgressDelayed();
     };
+}
+
+async function stopTask() {
+    if (!currentTaskId) return;
+
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('progress-message').textContent = 'Stopping...';
+
+    try {
+        await fetch('/stop_task/' + currentTaskId, { method: 'POST' });
+    } catch (error) {
+        console.error('Failed to stop task:', error);
+    }
 }
 
 async function startFetch() {
@@ -163,6 +260,38 @@ async function startDownload() {
     } catch (error) {
         setButtonLoading('download-btn', false);
         alert('Failed to start download: ' + error);
+    }
+}
+
+function confirmReset() {
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+}
+
+async function resetChannel() {
+    closeModal();
+    document.getElementById('reset-btn').disabled = true;
+    document.getElementById('reset-btn').textContent = 'Resetting...';
+
+    try {
+        const response = await fetch('/reset_channel/' + channelId, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            alert('Deleted ' + data.deleted + ' records');
+            location.reload();
+        } else {
+            alert('Reset failed');
+            document.getElementById('reset-btn').disabled = false;
+            document.getElementById('reset-btn').textContent = 'Reset Channel Data';
+        }
+    } catch (error) {
+        alert('Reset failed: ' + error);
+        document.getElementById('reset-btn').disabled = false;
+        document.getElementById('reset-btn').textContent = 'Reset Channel Data';
     }
 }
 </script>

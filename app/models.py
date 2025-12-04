@@ -1,10 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float
+from sqlalchemy import Column, Integer, String, Boolean, Float, UniqueConstraint
 
 from .database import Base
 
 
 class Media(Base):
     __tablename__ = "media"
+    __table_args__ = (
+        UniqueConstraint('tg_message_id', 'tg_channel_id', name='uq_message_channel'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     tg_message_id = Column(Integer, index=True)
     tg_channel_id = Column(Integer, index=True)

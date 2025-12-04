@@ -10,6 +10,7 @@ class TaskStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -31,6 +32,7 @@ class Task:
     operation: str
     progress: TaskProgress = field(default=None)
     _queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    _cancelled: bool = field(default=False)
 
     def __post_init__(self):
         self.progress = TaskProgress(
@@ -40,7 +42,16 @@ class Task:
             operation=self.operation,
         )
 
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled
+
+    def cancel(self):
+        self._cancelled = True
+
     async def update(self, current: int = None, total: int = None, message: str = None, status: TaskStatus = None):
+        if self._cancelled:
+            raise CancelledError("Task was cancelled")
         if current is not None:
             self.progress.current = current
         if total is not None:
@@ -62,12 +73,21 @@ class Task:
         self.progress.message = f"Error: {error}"
         await self._queue.put(self.progress)
 
+    async def set_cancelled(self, message: str = "Cancelled by user"):
+        self.progress.status = TaskStatus.CANCELLED
+        self.progress.message = message
+        await self._queue.put(self.progress)
+
     async def events(self) -> AsyncGenerator[TaskProgress, None]:
         while True:
             progress = await self._queue.get()
             yield progress
-            if progress.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
+            if progress.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
                 break
+
+
+class CancelledError(Exception):
+    pass
 
 
 class TaskManager:

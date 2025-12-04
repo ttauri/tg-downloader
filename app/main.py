@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 
 from .crud import (
     create_or_update_channel,
+    delete_channel_media,
     get_available_channels,
     get_channel_by_id,
+    get_channel_media_stats,
     get_subscribed_channels,
     set_channel_subscription,
     get_all_media,
@@ -56,6 +58,18 @@ async def read_root(request: Request, db: Session = Depends(get_db)):
     )
 
 
+def format_size(size_bytes):
+    """Format size in bytes to human readable string."""
+    if size_bytes < 1024:
+        return f"{size_bytes:.0f} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.2f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
 @app.get("/channel_details/", response_class=HTMLResponse)
 async def get_channel_details(
     request: Request, channel_id: str = Query(...), db: Session = Depends(get_db)
@@ -64,6 +78,8 @@ async def get_channel_details(
     all_media = get_all_media(db, channel_id)
     d_media = get_all_downloaded_media(db, channel_id)
     nd_media = get_all_not_downloaded_media(db, channel_id)
+    stats = get_channel_media_stats(db, channel_id)
+
     return templates.TemplateResponse(
         "channel_details.html",
         {
@@ -72,6 +88,21 @@ async def get_channel_details(
             "all_media": len(all_media),
             "downloaded_media": d_media.count(),
             "not_downloaded_media": nd_media.count(),
+            "stats": stats,
+            "video_count": stats['videos']['count'],
+            "video_downloaded": stats['videos']['downloaded'],
+            "video_size": format_size(stats['videos']['size']),
+            "video_downloaded_size": format_size(stats['videos']['downloaded_size']),
+            "image_count": stats['images']['count'],
+            "image_downloaded": stats['images']['downloaded'],
+            "image_size": format_size(stats['images']['size']),
+            "image_downloaded_size": format_size(stats['images']['downloaded_size']),
+            "other_count": stats['other']['count'],
+            "other_downloaded": stats['other']['downloaded'],
+            "other_size": format_size(stats['other']['size']),
+            "other_downloaded_size": format_size(stats['other']['downloaded_size']),
+            "total_size": format_size(stats['total_size']),
+            "total_downloaded_size": format_size(stats['total_downloaded_size']),
         },
     )
 
@@ -164,6 +195,16 @@ async def task_progress(task_id: str):
     )
 
 
+@app.post("/stop_task/{task_id}")
+async def stop_task(task_id: str):
+    """Stop a running task."""
+    task = task_manager.get_task(task_id)
+    if not task:
+        return {"error": "Task not found"}
+    task.cancel()
+    return {"status": "stopping", "task_id": task_id}
+
+
 @app.post("/subscribe_to_channel/", response_class=HTMLResponse)
 async def add_channel(
     request: Request, channel_id: str = Form(...), db: Session = Depends(get_db)
@@ -178,3 +219,10 @@ async def unsubscribe_from_channel(
 ):
     set_channel_subscription(db, channel_id, False)
     return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+
+
+@app.post("/reset_channel/{channel_id}")
+async def reset_channel(channel_id: str, db: Session = Depends(get_db)):
+    """Delete all media records for a channel."""
+    deleted = delete_channel_media(db, channel_id)
+    return {"status": "success", "deleted": deleted, "channel_id": channel_id}
