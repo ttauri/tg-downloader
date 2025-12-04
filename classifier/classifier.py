@@ -42,9 +42,9 @@ Each rule can have three types of conditions:
    - Matches if EITHER label is >= 10%
 
 3. exclude (exclusion logic)
-   - Listed labels must NOT exceed their maximum percentage
+   - Listed labels must be BELOW their maximum percentage
    - Example: {"MALE_GENITALIA_EXPOSED": 2}
-   - Fails if MALE_GENITALIA_EXPOSED > 2%
+   - Fails if MALE_GENITALIA_EXPOSED >= 2%
 
 RULE EVALUATION ORDER:
    1. Check exclude conditions first (if any fail -> rule doesn't match)
@@ -112,66 +112,12 @@ ALLOWED_LABELS = [
     "FACE_MALE",
 ]
 
-# Default classification rules (order matters - first match wins)
-# Rule structure:
-#   - dir_name: output directory
-#   - description: human-readable description
-#   - thresholds: labels that MUST be present (AND logic)
-#   - thresholds_any: labels where ANY can match (OR logic)
-#   - exclude: labels that must NOT exceed these values
-DEFAULT_RULES = [
-    # Explicit mixed content (both male and female)
-    {
-        "dir_name": "explicit_mf",
-        "description": "Mixed male and female explicit content",
-        "thresholds": {
-            "MALE_GENITALIA_EXPOSED": 3,
-            "FEMALE_GENITALIA_EXPOSED": 3,
-        },
-    },
-    # Solo female explicit (genitalia or anus visible)
-    {
-        "dir_name": "solo_f_explicit",
-        "description": "Solo female explicit (genitalia/anus)",
-        "thresholds_any": {
-            "FEMALE_GENITALIA_EXPOSED": 10,
-            "ANUS_EXPOSED": 10,
-        },
-        "exclude": {
-            "MALE_GENITALIA_EXPOSED": 2,
-        },
-    },
-    # Solo male explicit
-    {
-        "dir_name": "solo_m_explicit",
-        "description": "Solo male explicit content",
-        "thresholds": {
-            "MALE_GENITALIA_EXPOSED": 5,
-        },
-        "exclude": {
-            "FEMALE_GENITALIA_EXPOSED": 2,
-        },
-    },
-    # Softcore female (breast/buttocks, no explicit)
-    {
-        "dir_name": "softcore_f",
-        "description": "Softcore female (breast/buttocks only)",
-        "thresholds_any": {
-            "FEMALE_BREAST_EXPOSED": 15,
-            "BUTTOCKS_EXPOSED": 15,
-        },
-        "exclude": {
-            "FEMALE_GENITALIA_EXPOSED": 5,
-            "MALE_GENITALIA_EXPOSED": 2,
-            "ANUS_EXPOSED": 5,
-        },
-    },
-]
-
 DEFAULT_CONFIG = {
-    "threshold": 0.5,
+    "threshold": 0.4,
     "num_frames": 100,
     "video_extensions": [".mp4", ".avi", ".mov", ".mkv", ".webm"],
+    "model_path": "",  # Empty = use default 320n model
+    "model_resolution": 320,  # Must match model: 320 for 320n, 640 for 640m
 }
 
 
@@ -201,17 +147,17 @@ def save_config(config: dict, path: str):
             json.dump(config, f, indent=2)
 
 
-def load_rules(path: Optional[str] = None) -> List[dict]:
-    """Load classification rules from a YAML or JSON file, or return defaults."""
-    if path and os.path.exists(path):
-        with open(path, "r") as f:
-            if _is_yaml(path):
-                data = yaml.safe_load(f)
-                # YAML format has rules under 'rules' key
-                return data.get('rules', data) if isinstance(data, dict) else data
-            else:
-                return json.load(f)
-    return [r.copy() for r in DEFAULT_RULES]
+def load_rules(path: str) -> List[dict]:
+    """Load classification rules from a YAML or JSON file."""
+    if not path or not os.path.exists(path):
+        raise FileNotFoundError(f"Rules file not found: {path}")
+    with open(path, "r") as f:
+        if _is_yaml(path):
+            data = yaml.safe_load(f)
+            # YAML format has rules under 'rules' key
+            return data.get('rules', data) if isinstance(data, dict) else data
+        else:
+            return json.load(f)
 
 
 def save_rules(rules: List[dict], path: str):
@@ -226,9 +172,9 @@ def save_rules(rules: List[dict], path: str):
 def classify_video(
     video_path: str,
     detector: NudeDetector,
-    threshold: float = 0.5,
     num_frames: int = 100,
     progress_callback: Optional[Callable[[int, int], None]] = None,
+    include_all_labels: bool = False,
 ) -> Dict[str, float]:
     """
     Classify a video by analyzing frames.
@@ -236,12 +182,13 @@ def classify_video(
     Args:
         video_path: Path to the video file
         detector: NudeNet detector instance
-        threshold: Confidence threshold for detections (0.0-1.0)
         num_frames: Max number of frames to analyze (adjusted for short videos)
         progress_callback: Optional callback(current_frame, total_frames)
+        include_all_labels: If True, return dict with 'classifications' and 'metadata'
 
     Returns:
-        Dictionary mapping label names to percentage of frames containing that label
+        If include_all_labels=False: Dict mapping label names to percentage of frames
+        If include_all_labels=True: Dict with 'classifications' and 'metadata'
     """
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -249,6 +196,8 @@ def classify_video(
 
     if fps <= 0 or total_frames <= 0:
         cap.release()
+        if include_all_labels:
+            return {"classifications": {}, "metadata": {}}
         return {}
 
     duration = total_frames / fps
@@ -264,7 +213,7 @@ def classify_video(
     else:
         actual_frames = num_frames
 
-    classifications = {}
+    classifications = {}  # All detected labels
 
     # Calculate time interval between frames
     time_interval = duration / actual_frames
@@ -284,15 +233,15 @@ def classify_video(
             cv2.imwrite(temp_path, frame)
             result = detector.detect(temp_path)
 
-            # Track unique labels per frame (fixes >100% bug)
+            # Track labels per frame (any detection counts)
             frame_labels = set()
+
             for detected_object in result:
                 label = detected_object["class"]
-                score = detected_object["score"]
-                if score > threshold and label in ALLOWED_LABELS:
+                if label in ALLOWED_LABELS:
                     frame_labels.add(label)
 
-            # Increment count once per label per frame
+            # Increment counts
             for label in frame_labels:
                 classifications[label] = classifications.get(label, 0) + 1
 
@@ -311,6 +260,17 @@ def classify_video(
         for label in classifications:
             classifications[label] = (classifications[label] / analyzed_frames) * 100
 
+    if include_all_labels:
+        return {
+            "classifications": classifications,
+            "metadata": {
+                "duration": round(duration, 2),
+                "total_frames": total_frames,
+                "analyzed_frames": analyzed_frames,
+                "fps": round(fps, 2),
+            }
+        }
+
     return classifications
 
 
@@ -323,10 +283,10 @@ def matches_rule(classifications: Dict[str, float], rule: dict) -> bool:
         - thresholds_any: ANY label must meet minimum % (OR logic)
         - exclude: labels must NOT exceed these values
     """
-    # Check exclusions first - if any excluded label exceeds threshold, rule fails
+    # Check exclusions first - if any excluded label meets/exceeds threshold, rule fails
     if "exclude" in rule:
         for label, max_pct in rule["exclude"].items():
-            if label in classifications and classifications[label] > max_pct:
+            if label in classifications and classifications[label] >= max_pct:
                 return False
 
     # Check required thresholds (AND logic) - all must match
@@ -365,8 +325,8 @@ def get_matching_rule(
 def classify_and_sort(
     input_dir: str,
     output_dir: str,
+    rules: List[dict],
     config: Optional[dict] = None,
-    rules: Optional[List[dict]] = None,
     dry_run: bool = False,
     on_video_start: Optional[Callable[[int, int, str], None]] = None,
     on_video_done: Optional[Callable[[str, dict, Optional[str]], None]] = None,
@@ -377,8 +337,8 @@ def classify_and_sort(
     Args:
         input_dir: Directory containing videos
         output_dir: Directory to move sorted videos to
+        rules: Classification rules (required)
         config: Classification configuration (uses defaults if None)
-        rules: Classification rules (uses defaults if None)
         dry_run: If True, don't actually move files
         on_video_start: Callback(index, total, filename) when starting a video
         on_video_done: Callback(filename, classifications, category) when done
@@ -388,8 +348,6 @@ def classify_and_sort(
     """
     if config is None:
         config = DEFAULT_CONFIG.copy()
-    if rules is None:
-        rules = [r.copy() for r in DEFAULT_RULES]
 
     extensions = config.get("video_extensions", DEFAULT_CONFIG["video_extensions"])
     threshold = config.get("threshold", DEFAULT_CONFIG["threshold"])

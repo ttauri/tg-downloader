@@ -11,11 +11,12 @@
 #
 # For a video analyzed with 100 frames:
 #   - 15 = label detected in at least 15 frames
-#   - 2  = label detected in at least 2 frames
+#   - 1  = label detected in at least 1 frame
 #
 # CHOOSING THRESHOLD VALUES
 # -------------------------
-#   2-3%   : "Almost none" - use in 'exclude' to filter out minimal presence
+#   1%     : "Any presence" - even brief appearance
+#   2-5%   : "Minimal presence" - appears briefly
 #   5-10%  : "Some presence" - content appears occasionally
 #   15-20% : "Significant presence" - main feature of the video
 #   50%+   : "Dominant" - appears in most of the video
@@ -24,9 +25,9 @@
 # --------------
 # Each rule can have:
 #
-#   thresholds:      AND logic - ALL labels must meet minimum %
-#   thresholds_any:  OR logic  - ANY label must meet minimum %
-#   exclude:         Labels must NOT exceed these values
+#   thresholds:      AND logic - ALL labels must be >= minimum %
+#   thresholds_any:  OR logic  - ANY label must be >= minimum %
+#   exclude:         Labels must be < these values (fails if >=)
 #
 # Rules are evaluated in order - first match wins!
 #
@@ -48,43 +49,46 @@ rules:
   # ---------------------------------------------------------------------------
   # EXPLICIT MIXED (male + female)
   # ---------------------------------------------------------------------------
-  # Matches if BOTH male AND female genitalia appear in 3%+ frames
+  # Any male genitalia (>=1%) with any female content -> mixed category
+  # This rule catches all m+f combinations first
   - dir_name: explicit_mf
-    description: Mixed male and female explicit content
+    description: Mixed male and female content
     thresholds:
-      MALE_GENITALIA_EXPOSED: 3
-      FEMALE_GENITALIA_EXPOSED: 3
+      MALE_GENITALIA_EXPOSED: 1
+    thresholds_any:
+      FEMALE_GENITALIA_EXPOSED: 1
+      FEMALE_BREAST_EXPOSED: 5
+      BUTTOCKS_EXPOSED: 5
+      ANUS_EXPOSED: 1
+
+  # ---------------------------------------------------------------------------
+  # SOLO MALE EXPLICIT
+  # ---------------------------------------------------------------------------
+  # Male genitalia without female content
+  - dir_name: solo_m_explicit
+    description: Solo male explicit content
+    thresholds:
+      MALE_GENITALIA_EXPOSED: 5
+    exclude:
+      FEMALE_GENITALIA_EXPOSED: 1
+      FEMALE_BREAST_EXPOSED: 5
 
   # ---------------------------------------------------------------------------
   # SOLO FEMALE EXPLICIT
   # ---------------------------------------------------------------------------
-  # Matches if female genitalia OR anus in 10%+ frames
-  # Excludes videos with male genitalia (>2% = not solo)
+  # Female genitalia OR anus, no male genitalia
   - dir_name: solo_f_explicit
     description: Solo female explicit (genitalia/anus)
     thresholds_any:
       FEMALE_GENITALIA_EXPOSED: 10
       ANUS_EXPOSED: 10
     exclude:
-      MALE_GENITALIA_EXPOSED: 2
-
-  # ---------------------------------------------------------------------------
-  # SOLO MALE EXPLICIT
-  # ---------------------------------------------------------------------------
-  # Matches if male genitalia in 5%+ frames
-  # Excludes videos with female genitalia (>2% = not solo)
-  - dir_name: solo_m_explicit
-    description: Solo male explicit content
-    thresholds:
-      MALE_GENITALIA_EXPOSED: 5
-    exclude:
-      FEMALE_GENITALIA_EXPOSED: 2
+      MALE_GENITALIA_EXPOSED: 1
 
   # ---------------------------------------------------------------------------
   # SOFTCORE FEMALE
   # ---------------------------------------------------------------------------
-  # Matches breast OR buttocks in 15%+ frames
-  # Excludes explicit content (genitalia/anus)
+  # Breast OR buttocks only, no explicit content, no male
   - dir_name: softcore_f
     description: Softcore female (breast/buttocks only)
     thresholds_any:
@@ -92,5 +96,5 @@ rules:
       BUTTOCKS_EXPOSED: 15
     exclude:
       FEMALE_GENITALIA_EXPOSED: 5
-      MALE_GENITALIA_EXPOSED: 2
+      MALE_GENITALIA_EXPOSED: 1
       ANUS_EXPOSED: 5

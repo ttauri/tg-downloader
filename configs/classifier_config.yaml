@@ -5,8 +5,8 @@
 # Detection confidence threshold (0.0 - 1.0)
 # Higher = fewer false positives, but may miss some detections
 # Lower = more detections, but more false positives
-# Recommended: 0.5
-threshold: 0.5
+# Recommended: 0.4-0.5
+threshold: 0.4
 
 # Number of frames to analyze per video
 # The classifier samples frames evenly throughout the video
@@ -21,3 +21,22 @@ video_extensions:
   - .mov
   - .mkv
   - .webm
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+# NudeNet model settings
+# Available models (download from NudeNet releases):
+#   - 320n.onnx (default) - nano model, 320px, fast but less accurate
+#   - 640m.onnx - medium model, 640px, slower but more accurate
+#
+# model_path: path to custom .onnx model file (leave empty for default 320n)
+# model_resolution: must match model (320 for 320n, 640 for 640m)
+
+# Option 1: Default 320n model (fast, ~12MB)
+model_path: ""
+model_resolution: 320
+
+# Option 2: 640m model (slow but more accurate, ~100MB)
+# model_path: "configs/640m.onnx"
+# model_resolution: 640

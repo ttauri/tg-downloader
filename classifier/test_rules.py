@@ -18,7 +18,9 @@ import shutil
 import sys
 from collections import defaultdict
 
-from classifier import load_rules, matches_rule, get_matching_rule, DEFAULT_RULES
+from pathlib import Path
+
+from classifier import load_rules, matches_rule, get_matching_rule
 
 
 def load_analysis(path: str) -> dict:
@@ -189,7 +191,16 @@ def test_single_video(analysis: dict, rules: list, filename: str):
     print(f"Video: {video['filename']}")
     print("-" * 60)
 
+    # Show video metadata if available
+    video_metadata = video.get("video_metadata", {})
+    if video_metadata:
+        print(f"Duration: {video_metadata.get('duration', '?')}s, "
+              f"Frames analyzed: {video_metadata.get('analyzed_frames', '?')}, "
+              f"Threshold: {video_metadata.get('threshold', '?')}")
+        print("-" * 60)
+
     classifications = video["classifications"]
+
     if not classifications:
         print("No detections")
         return
@@ -296,11 +307,18 @@ def main():
 
     # Load rules
     if args.rules:
-        rules = load_rules(args.rules)
-        print(f"Using rules from: {args.rules}")
+        rules_path = args.rules
     else:
-        rules = DEFAULT_RULES.copy()
-        print("Using default rules")
+        # Default to configs/classifier_rules.yaml
+        script_dir = Path(__file__).resolve().parent
+        rules_path = str(script_dir.parent / "configs" / "classifier_rules.yaml")
+
+    try:
+        rules = load_rules(rules_path)
+        print(f"Using rules from: {rules_path}")
+    except FileNotFoundError:
+        print(f"Error: Rules file not found: {rules_path}")
+        sys.exit(1)
 
     print()
 
