@@ -78,9 +78,15 @@
     <span class="legend-item"><span class="legend-color total"></span> Total</span>
 </div>
 
-<!-- Actions Panel -->
-<div class="actions-panel">
-    <h3>Actions</h3>
+<!-- Tabs -->
+<div class="tabs">
+    <button type="button" class="tab-btn active" onclick="switchTab('actions')">Actions</button>
+    <button type="button" class="tab-btn" onclick="switchTab('storage')">Storage</button>
+    <button type="button" class="tab-btn" onclick="switchTab('library')">Media Library</button>
+</div>
+
+<!-- Tab: Actions -->
+<div id="tab-actions" class="tab-content active">
     <div class="action-row">
         <div class="action-info">
             <span class="action-label">Fetch Messages</span>
@@ -111,11 +117,16 @@
             <span class="btn-spinner hidden"></span>
         </button>
     </div>
+
+    <div class="danger-zone">
+        <h3>Danger Zone</h3>
+        <p>This will delete all fetched media info from the database for this channel. Downloaded files will not be deleted.</p>
+        <button type="button" id="reset-btn" class="danger-btn" onclick="confirmReset()">Reset Channel Data</button>
+    </div>
 </div>
 
-<!-- Storage Panel -->
-<div class="storage-panel">
-    <h3>Storage</h3>
+<!-- Tab: Storage -->
+<div id="tab-storage" class="tab-content">
     <div id="storage-loading" class="storage-loading">Loading storage info...</div>
     <div id="storage-content" class="hidden">
         <div class="storage-header">
@@ -127,7 +138,7 @@
             <div id="storage-warning" class="storage-warning hidden">
                 <span class="warning-icon">!</span>
                 <span class="warning-text">Mismatch: DB and disk file counts differ</span>
-                <button type="button" class="action-btn small" onclick="startSync()">Sync</button>
+                <button type="button" class="action-btn small" onclick="switchTab('actions'); startSync();">Sync</button>
             </div>
         </div>
         <div class="storage-stats">
@@ -161,10 +172,29 @@
     </div>
 </div>
 
-<div class="danger-zone">
-    <h3>Danger Zone</h3>
-    <p>This will delete all fetched media info from the database for this channel. Downloaded files will not be deleted.</p>
-    <button type="button" id="reset-btn" class="danger-btn" onclick="confirmReset()">Reset Channel Data</button>
+<!-- Tab: Media Library -->
+<div id="tab-library" class="tab-content">
+    <div class="media-filters">
+        <select id="media-type-filter" onchange="loadMediaList()">
+            <option value="">All Types</option>
+            <option value="video">Videos</option>
+            <option value="image">Images</option>
+            <option value="audio">Audio</option>
+        </select>
+        <select id="download-filter" onchange="loadMediaList()">
+            <option value="">All Status</option>
+            <option value="true">Downloaded</option>
+            <option value="false">Pending</option>
+        </select>
+        <span id="media-count" class="media-count"></span>
+    </div>
+    <div id="media-list-loading" class="storage-loading">Loading media...</div>
+    <div id="media-list" class="media-list hidden"></div>
+    <div id="media-pagination" class="media-pagination hidden">
+        <button type="button" class="action-btn small" id="prev-btn" onclick="prevPage()" disabled>Prev</button>
+        <span id="page-info"></span>
+        <button type="button" class="action-btn small" id="next-btn" onclick="nextPage()">Next</button>
+    </div>
 </div>
 
 <!-- Confirmation Modal -->
@@ -185,6 +215,29 @@ const channelId = "{{ channel.channel_id }}";
 let eventSource = null;
 let currentTaskId = null;
 let currentBtnId = null;
+let storageLoaded = false;
+let libraryLoaded = false;
+
+// Tab switching
+function switchTab(tabName) {
+    // Update buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.tab-btn[onclick="switchTab('${tabName}')"]`).classList.add('active');
+
+    // Update content
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+
+    // Lazy load content
+    if (tabName === 'storage' && !storageLoaded) {
+        loadStorageInfo();
+        storageLoaded = true;
+    }
+    if (tabName === 'library' && !libraryLoaded) {
+        loadMediaList();
+        libraryLoaded = true;
+    }
+}
 
 function showProgress(title) {
     const panel = document.getElementById('progress-panel');
@@ -452,8 +505,108 @@ async function startSync() {
     }
 }
 
-// Load storage info on page load
-document.addEventListener('DOMContentLoaded', loadStorageInfo);
+// Media List Functions
+let mediaOffset = 0;
+const mediaLimit = 50;
+let mediaTotal = 0;
+
+async function loadMediaList() {
+    const typeFilter = document.getElementById('media-type-filter').value;
+    const downloadFilter = document.getElementById('download-filter').value;
+
+    let url = `/media_list/${channelId}?limit=${mediaLimit}&offset=${mediaOffset}`;
+    if (typeFilter) url += `&media_type=${typeFilter}`;
+    if (downloadFilter) url += `&downloaded=${downloadFilter}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        document.getElementById('media-list-loading').classList.add('hidden');
+        document.getElementById('media-list').classList.remove('hidden');
+        document.getElementById('media-pagination').classList.remove('hidden');
+
+        mediaTotal = data.total;
+        document.getElementById('media-count').textContent = `${data.total} items`;
+
+        const list = document.getElementById('media-list');
+        list.innerHTML = '';
+
+        if (data.items.length === 0) {
+            list.innerHTML = '<div class="no-media">No media found</div>';
+            document.getElementById('media-pagination').classList.add('hidden');
+            return;
+        }
+
+        for (const item of data.items) {
+            const row = document.createElement('div');
+            row.className = 'media-item' + (item.is_duplicate ? ' duplicate' : '');
+
+            const typeIcon = getTypeIcon(item.media_type);
+            const status = item.is_downloaded ? '<span class="status-downloaded">Downloaded</span>' :
+                          (item.is_duplicate ? '<span class="status-duplicate">Duplicate</span>' :
+                          '<span class="status-pending">Pending</span>');
+
+            let details = [];
+            if (item.resolution) details.push(item.resolution);
+            if (item.duration_formatted) details.push(item.duration_formatted);
+            if (item.size_formatted) details.push(item.size_formatted);
+
+            const name = item.original_filename || item.filename || `Media #${item.tg_message_id}`;
+            const date = item.message_date ? new Date(item.message_date).toLocaleDateString() : '';
+
+            row.innerHTML = `
+                <div class="media-icon">${typeIcon}</div>
+                <div class="media-info">
+                    <div class="media-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                    <div class="media-details">${details.join(' | ')}</div>
+                    ${item.caption ? `<div class="media-caption">${escapeHtml(item.caption)}</div>` : ''}
+                </div>
+                <div class="media-meta">
+                    <div>${status}</div>
+                    <div class="media-date">${date}</div>
+                </div>
+            `;
+            list.appendChild(row);
+        }
+
+        updatePagination();
+    } catch (error) {
+        document.getElementById('media-list-loading').classList.add('hidden');
+        document.getElementById('media-list').classList.remove('hidden');
+        document.getElementById('media-list').innerHTML = '<div class="no-media">Failed to load media</div>';
+    }
+}
+
+function getTypeIcon(mimeType) {
+    if (!mimeType) return '?';
+    if (mimeType.startsWith('video')) return 'V';
+    if (mimeType.startsWith('image')) return 'I';
+    if (mimeType.startsWith('audio')) return 'A';
+    return 'F';
+}
+
+function updatePagination() {
+    const totalPages = Math.ceil(mediaTotal / mediaLimit);
+    const currentPage = Math.floor(mediaOffset / mediaLimit) + 1;
+
+    document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+    document.getElementById('prev-btn').disabled = mediaOffset === 0;
+    document.getElementById('next-btn').disabled = mediaOffset + mediaLimit >= mediaTotal;
+}
+
+function prevPage() {
+    if (mediaOffset > 0) {
+        mediaOffset -= mediaLimit;
+        loadMediaList();
+    }
+}
+
+function nextPage() {
+    if (mediaOffset + mediaLimit < mediaTotal) {
+        mediaOffset += mediaLimit;
+        loadMediaList();
+    }
+}
 </script>
 {% endblock %}
-

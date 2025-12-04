@@ -20,6 +20,7 @@ from .crud import (
     get_all_downloaded_media,
     get_all_not_downloaded_media,
 )
+from .models import Media
 from .database import get_db, init_db
 from .routes import media
 from .schemas import ChannelCreate
@@ -114,16 +115,15 @@ async def get_channel_details(
     )
 
 
-@app.get("/update_channels_list/", response_class=HTMLResponse)
+@app.get("/update_channels_list/")
 async def update_channel_form(request: Request, db: Session = Depends(get_db)):
     available_channels = await fetch_channels_list()
 
     for channel in available_channels:
         chan = ChannelCreate(channel_id=str(channel.id), channel_name=channel.name)
         create_or_update_channel(db, chan)
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "available_channels": available_channels}
-    )
+
+    return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
 
 
 async def run_fetch_task(channel_id: str, task):
@@ -206,6 +206,19 @@ async def task_progress(task_id: str):
 
     async def event_stream():
         try:
+            # Send current state immediately when connection is established
+            progress = task.progress
+            data = {
+                "task_id": progress.task_id,
+                "status": progress.status.value,
+                "current": progress.current,
+                "total": progress.total,
+                "message": progress.message or "Starting...",
+                "error": progress.error,
+            }
+            yield f"data: {json.dumps(data)}\n\n"
+
+            # Then listen for updates
             async for progress in task.events():
                 data = {
                     "task_id": progress.task_id,
@@ -307,4 +320,67 @@ async def storage_info(channel_id: str, db: Session = Depends(get_db)):
         "db_downloaded_count": db_downloaded_count,
         "db_total_count": len(all_media),
         "mismatch": stats['file_count'] != db_downloaded_count if stats['exists'] else False,
+    }
+
+
+def format_duration(seconds):
+    """Format duration in seconds to MM:SS or HH:MM:SS."""
+    if not seconds:
+        return None
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+@app.get("/media_list/{channel_id}")
+async def media_list(
+    channel_id: str,
+    db: Session = Depends(get_db),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    media_type: str = Query(None),
+    downloaded: bool = Query(None),
+):
+    """Get paginated media list with metadata for a channel."""
+    from sqlalchemy import and_
+
+    query = db.query(Media).filter(Media.tg_channel_id == channel_id)
+
+    if media_type:
+        query = query.filter(Media.media_type.like(f"{media_type}%"))
+    if downloaded is not None:
+        query = query.filter(Media.is_downloaded == downloaded)
+
+    total = query.count()
+    items = query.order_by(Media.message_date.desc()).offset(offset).limit(limit).all()
+
+    media_items = []
+    for m in items:
+        media_items.append({
+            "id": m.id,
+            "tg_message_id": m.tg_message_id,
+            "media_type": m.media_type,
+            "size": m.size,
+            "size_formatted": format_size(m.size) if m.size else None,
+            "is_downloaded": m.is_downloaded,
+            "filename": m.filename,
+            "original_filename": m.original_filename,
+            "duration": m.duration,
+            "duration_formatted": format_duration(m.duration),
+            "width": m.width,
+            "height": m.height,
+            "resolution": f"{m.width}x{m.height}" if m.width and m.height else None,
+            "message_date": m.message_date.isoformat() if m.message_date else None,
+            "caption": m.caption[:100] + "..." if m.caption and len(m.caption) > 100 else m.caption,
+            "is_duplicate": m.duplicate_of_id is not None,
+        })
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "items": media_items,
     }

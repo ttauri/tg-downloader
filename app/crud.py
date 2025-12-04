@@ -42,13 +42,30 @@ def get_all_media(db: Session, channel_id: str):
 
 def get_all_not_downloaded_media(db: Session, channel_id: int, order="none"):
     query = db.query(Media).filter(
-        and_(Media.tg_channel_id == channel_id, Media.is_downloaded == False)
+        and_(
+            Media.tg_channel_id == channel_id,
+            Media.is_downloaded == False,
+            Media.duplicate_of_id == None  # Exclude duplicates
+        )
     )
     if order == "small":
         query = query.order_by(asc(Media.size))
     elif order == "large":
         query = query.order_by(desc(Media.size))
     return query
+
+
+def find_downloaded_by_file_id(db: Session, channel_id: str, tg_file_id: int):
+    """Find a downloaded media record with the same tg_file_id."""
+    if not tg_file_id:
+        return None
+    return db.query(Media).filter(
+        and_(
+            Media.tg_channel_id == channel_id,
+            Media.tg_file_id == tg_file_id,
+            Media.is_downloaded == True
+        )
+    ).first()
 
 
 def get_all_downloaded_media(db: Session, channel_id: str):

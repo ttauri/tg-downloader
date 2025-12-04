@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 
 class MediaBase(BaseModel):
@@ -9,6 +10,19 @@ class MediaBase(BaseModel):
     size: float
     is_downloaded: bool
     filename: str
+
+    # Telegram file identification
+    tg_file_id: Optional[int] = None
+
+    # File metadata
+    original_filename: Optional[str] = None
+    duration: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+
+    # Message metadata
+    message_date: Optional[datetime] = None
+    caption: Optional[str] = None
 
 
 class MediaCreate(MediaBase):

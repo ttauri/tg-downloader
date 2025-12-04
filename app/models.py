@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, UniqueConstraint, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, Text, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -16,6 +16,19 @@ class Media(Base):
     size = Column(Float)  # Telegram-reported size
     is_downloaded = Column(Boolean, default=False)
     filename = Column(String, index=True)
+
+    # Telegram file identification (for deduplication)
+    tg_file_id = Column(BigInteger, index=True)  # message.document.id - unique per file
+
+    # File metadata from Telegram
+    original_filename = Column(String)  # Original filename from Telegram
+    duration = Column(Integer)  # Duration in seconds (video/audio)
+    width = Column(Integer)  # Width in pixels (video/image)
+    height = Column(Integer)  # Height in pixels (video/image)
+
+    # Message metadata
+    message_date = Column(DateTime)  # When message was posted
+    caption = Column(Text)  # Message text/description
 
     # Sync & deduplication fields
     file_hash = Column(String, index=True)  # SHA256 of first+last 1MB
