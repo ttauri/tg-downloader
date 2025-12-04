@@ -1,6 +1,9 @@
+import asyncio
+import json
+
 import starlette.status as status
-from fastapi import Depends, FastAPI, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, Form, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -20,6 +23,7 @@ from .database import SessionLocal, init_db
 from .routes import channels, media
 from .schemas import ChannelCreate
 from .services.channels_list import get_channels_list
+from .services.task_manager import task_manager, TaskStatus
 from .services.periodic_task import (
     check_for_new_messages,
     fetch_messages_form_channel,
@@ -97,20 +101,80 @@ async def update_channel_form(request: Request, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/fetch_messages/", response_class=HTMLResponse)
+async def run_fetch_task(channel_id: str, task):
+    """Background task wrapper for fetching messages."""
+    await fetch_messages_form_channel(channel_id=channel_id, task=task)
+
+
+async def run_download_task(channel_id: str, task):
+    """Background task wrapper for downloading media."""
+    await download_media_from_channel(channel_id=channel_id, task=task)
+
+
+@app.post("/fetch_messages/")
 async def check_messages(
-    request: Request, channel_id: str = Query(...), db: Session = Depends(get_db)
+    request: Request,
+    background_tasks: BackgroundTasks,
+    channel_id: str = Query(...),
+    db: Session = Depends(get_db)
 ):
-    await fetch_messages_form_channel(channel_id=channel_id)
-    return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+    # Check if there's already an active task for this channel
+    existing = task_manager.get_active_task(channel_id, "fetch")
+    if existing:
+        return {"task_id": existing.task_id, "status": "already_running"}
+
+    task = task_manager.create_task(channel_id, "fetch")
+    background_tasks.add_task(run_fetch_task, channel_id, task)
+    return {"task_id": task.task_id, "status": "started"}
 
 
-@app.post("/download_media_from_channel/", response_class=HTMLResponse)
+@app.post("/download_media_from_channel/")
 async def download_media(
-    request: Request, channel_id: str = Query(...), db: Session = Depends(get_db)
+    request: Request,
+    background_tasks: BackgroundTasks,
+    channel_id: str = Query(...),
+    db: Session = Depends(get_db)
 ):
-    await download_media_from_channel(channel_id=channel_id)
-    return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+    # Check if there's already an active task for this channel
+    existing = task_manager.get_active_task(channel_id, "download")
+    if existing:
+        return {"task_id": existing.task_id, "status": "already_running"}
+
+    task = task_manager.create_task(channel_id, "download")
+    background_tasks.add_task(run_download_task, channel_id, task)
+    return {"task_id": task.task_id, "status": "started"}
+
+
+@app.get("/task_progress/{task_id}")
+async def task_progress(task_id: str):
+    """SSE endpoint for streaming task progress."""
+    task = task_manager.get_task(task_id)
+    if not task:
+        return {"error": "Task not found"}
+
+    async def event_stream():
+        try:
+            async for progress in task.events():
+                data = {
+                    "task_id": progress.task_id,
+                    "status": progress.status.value,
+                    "current": progress.current,
+                    "total": progress.total,
+                    "message": progress.message,
+                    "error": progress.error,
+                }
+                yield f"data: {json.dumps(data)}\n\n"
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @app.post("/subscribe_to_channel/", response_class=HTMLResponse)

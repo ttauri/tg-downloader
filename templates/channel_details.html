@@ -3,47 +3,168 @@
 {% block content %}
 <h2>{{channel.channel_name}} Details </h2>
 
+<!-- Progress Panel -->
+<div id="progress-panel" class="progress-panel hidden">
+    <div class="progress-header">
+        <span id="progress-title">Operation in progress...</span>
+        <span id="progress-status" class="status-badge">running</span>
+    </div>
+    <div class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+    </div>
+    <div id="progress-message" class="progress-message">Starting...</div>
+</div>
+
 <table class="channel-table">
     <thead>
         <tr>
             <th>Param</th>
             <th>Value</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td>Channel ID</td>
             <td>{{ channel.channel_id }}</td>
+            <td></td>
         </tr>
         <tr>
             <td>Messages fetched</td>
-            <td>{{ all_media }}</td>
+            <td id="all-media-count">{{ all_media }}</td>
             <td>
-              <form action="/fetch_messages/?channel_id={{channel.channel_id}}" method="post">
-                  <input type="submit" value="Fetch messages data" />
-              </form>
+                <button type="button" id="fetch-btn" class="action-btn" onclick="startFetch()">
+                    <span class="btn-text">Fetch messages data</span>
+                    <span class="btn-spinner hidden"></span>
+                </button>
             </td>
         </tr>
         <tr>
             <td>Messages downloaded</td>
-            <td>{{ downloaded_media}}</td>
+            <td id="downloaded-count">{{ downloaded_media }}</td>
             <td>
-              <form action="/download_media_from_channel/?channel_id={{channel.channel_id}}" method="post">
-                  <input type="submit" value="Download media" />
-              </form>
+                <button type="button" id="download-btn" class="action-btn" onclick="startDownload()">
+                    <span class="btn-text">Download media</span>
+                    <span class="btn-spinner hidden"></span>
+                </button>
             </td>
         </tr>
         <tr>
             <td>Messages not downloaded</td>
-            <td>{{ not_downloaded_media}}</td>
+            <td id="not-downloaded-count">{{ not_downloaded_media }}</td>
+            <td></td>
         </tr>
     </tbody>
 </table>
-<!---->
-<!-- <form action="/check_messages/" method="post"> -->
-<!--     <label for="channel_id">Channel ID:</label> -->
-<!--     <input type="text" id="channel_id" name="channel_id"> -->
-<!--     <button type="submit">Do</button> -->
-<!-- </form> -->
+
+<script>
+const channelId = "{{ channel.channel_id }}";
+let eventSource = null;
+
+function showProgress(title) {
+    const panel = document.getElementById('progress-panel');
+    document.getElementById('progress-title').textContent = title;
+    document.getElementById('progress-status').textContent = 'starting';
+    document.getElementById('progress-status').className = 'status-badge running';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-message').textContent = 'Starting...';
+    panel.classList.remove('hidden');
+}
+
+function updateProgress(data) {
+    const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-message').textContent = data.message;
+    document.getElementById('progress-status').textContent = data.status;
+    document.getElementById('progress-status').className = 'status-badge ' + data.status;
+}
+
+function hideProgressDelayed() {
+    setTimeout(() => {
+        document.getElementById('progress-panel').classList.add('hidden');
+    }, 3000);
+}
+
+function setButtonLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    const text = btn.querySelector('.btn-text');
+    const spinner = btn.querySelector('.btn-spinner');
+
+    if (loading) {
+        btn.disabled = true;
+        text.classList.add('hidden');
+        spinner.classList.remove('hidden');
+    } else {
+        btn.disabled = false;
+        text.classList.remove('hidden');
+        spinner.classList.add('hidden');
+    }
+}
+
+function subscribeToProgress(taskId, btnId, title) {
+    showProgress(title);
+
+    eventSource = new EventSource('/task_progress/' + taskId);
+
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        updateProgress(data);
+
+        if (data.status === 'completed' || data.status === 'failed') {
+            eventSource.close();
+            setButtonLoading(btnId, false);
+            hideProgressDelayed();
+            // Refresh counts after completion
+            if (data.status === 'completed') {
+                setTimeout(() => location.reload(), 2000);
+            }
+        }
+    };
+
+    eventSource.onerror = function() {
+        eventSource.close();
+        setButtonLoading(btnId, false);
+        document.getElementById('progress-status').textContent = 'error';
+        document.getElementById('progress-status').className = 'status-badge failed';
+        hideProgressDelayed();
+    };
+}
+
+async function startFetch() {
+    setButtonLoading('fetch-btn', true);
+
+    try {
+        const response = await fetch('/fetch_messages/?channel_id=' + channelId, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.task_id) {
+            subscribeToProgress(data.task_id, 'fetch-btn', 'Fetching messages...');
+        }
+    } catch (error) {
+        setButtonLoading('fetch-btn', false);
+        alert('Failed to start fetch: ' + error);
+    }
+}
+
+async function startDownload() {
+    setButtonLoading('download-btn', true);
+
+    try {
+        const response = await fetch('/download_media_from_channel/?channel_id=' + channelId, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.task_id) {
+            subscribeToProgress(data.task_id, 'download-btn', 'Downloading media...');
+        }
+    } catch (error) {
+        setButtonLoading('download-btn', false);
+        alert('Failed to start download: ' + error);
+    }
+}
+</script>
 {% endblock %}
 

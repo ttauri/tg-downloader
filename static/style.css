@@ -53,15 +53,7 @@ h2 {
     margin-top: 15px;
     margin-bottom: 5px;
     border-bottom: 1px solid var(--border-color);
-    padding-bottom: 3.channel-table a {
-    color: var(--text-color); /* Uses the main text color */
-    text-decoration: none; /* Removes the underline */
-}
-
-.channel-table a:hover {
-    color: var(--highlight-color); /* Changes color on hover */
-    text-decoration: underline; /* Adds underline on hover */
-}px;
+    padding-bottom: 3px;
 }
 
 .channel-table {
@@ -95,4 +87,107 @@ h2 {
 
 .channel-table tr:hover {
     background-color: var(--secondary-color);
+}
+
+/* Utility */
+.hidden {
+    display: none !important;
+}
+
+/* Action Buttons */
+.action-btn {
+    font-family: 'Courier New', monospace;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 150px;
+    position: relative;
+}
+
+.action-btn:hover:not(:disabled) {
+    background-color: var(--border-color);
+    color: var(--highlight-color);
+}
+
+.action-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--text-color);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Progress Panel */
+.progress-panel {
+    background-color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#progress-title {
+    color: var(--highlight-color);
+    font-weight: bold;
+}
+
+.status-badge {
+    padding: 2px 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.status-badge.running,
+.status-badge.starting {
+    background-color: #2d4a1c;
+    color: #7cb342;
+}
+
+.status-badge.completed {
+    background-color: #1b5e20;
+    color: #81c784;
+}
+
+.status-badge.failed,
+.status-badge.error {
+    background-color: #4a1c1c;
+    color: #e57373;
+}
+
+.progress-bar-container {
+    background-color: var(--bg-color);
+    height: 16px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 6px;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--highlight-color);
+    transition: width 0.3s ease;
+}
+
+.progress-message {
+    font-size: 13px;
+    color: var(--text-color);
 }
