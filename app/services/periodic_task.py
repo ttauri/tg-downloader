@@ -1,46 +1,13 @@
-import os
 from typing import Optional
 
 from app import schemas
 from app.config import settings
 from app.services.helper_functions import sanitize_dirname
 from app.services.task_manager import Task, TaskStatus
-from app.crud import (
-    create_media,
-    get_subscribed_channels,
-    get_channel_by_id,
-    get_all_not_downloaded_media,
-)
+from app.crud import create_media, get_channel_by_id, get_all_not_downloaded_media
 from app.database import SessionLocal
-from app.telegram_client import client, download_media_from_message, fetch_channel_media
+from app.telegram_client import client, download_media_from_message
 from app.logging_conf import logger
-
-
-async def check_for_new_messages():
-    print("Querying messages")
-    async with client:
-        db = SessionLocal()
-        channels = get_subscribed_channels(db)
-        for channel in channels:
-            async for message in fetch_channel_media(channel.channel_id):
-                media_path = await download_media_from_message(
-                    message, settings.media_download_path
-                )
-                if media_path:
-                    media_size = os.path.getsize(media_path) / (1024 * 1024)
-                    media_type = "img" if "image" in media_path else "video"
-                    new_media = schemas.MediaCreate(
-                        tg_message_id=message.id,
-                        tg_channel_id=channel.id,
-                        media_type=media_type,
-                        download_link=media_path,
-                        size=media_size,
-                        is_downloaded=True,
-                        channel_id=channel.channel_id,
-                        filename=""
-                    )
-                    print(new_media)
-                    create_media(db=db, media=new_media)
 
 
 async def download_media_from_channel(channel_id: int, task: Optional[Task] = None):
