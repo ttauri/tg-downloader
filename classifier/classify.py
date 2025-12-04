@@ -67,12 +67,13 @@ def sort_videos_by_rules(video_directory, output_directory, classifier, rules, n
                 classifications = classify_video(video_path, classifier, num_frames=num_frames)
             except BaseException as e:
                 print(f"Unable to process {filename} E:{e}")
+                continue
             print(classifications)
             # Check if the video matches any rule
             for rule in rules:
                 if matches_rule(classifications, rule):
                     # Create rule directory if it doesn't exist
-                    rule_dir = os.path.join(output_directory, rule['dir_name'])
+
                     os.makedirs(rule_dir, exist_ok=True)
                     # Move the video to the rule directory
                     shutil.move(video_path, os.path.join(rule_dir, filename))
