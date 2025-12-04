@@ -11,3 +11,4 @@ tabulate
 nudenet
 tqdm
 python-multipart
+pyyaml
