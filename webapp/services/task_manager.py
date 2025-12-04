@@ -23,6 +23,7 @@ class TaskProgress:
     total: int = 0
     message: str = ""
     error: Optional[str] = None
+    file_progress: int = 0  # Current file download progress (0-100)
 
 
 @dataclass
@@ -48,15 +49,10 @@ class Task:
 
     def cancel(self):
         self._cancelled = True
-        # Push cancelled status to queue immediately so SSE stream ends
-        self.progress.status = TaskStatus.CANCELLED
-        self.progress.message = "Cancelled by user"
-        try:
-            self._queue.put_nowait(self.progress)
-        except asyncio.QueueFull:
-            pass  # Queue is full, event will be sent when space is available
+        # Don't change status/message here - let the task finish current work
+        # and update the status when it's actually done
 
-    async def update(self, current: int = None, total: int = None, message: str = None, status: TaskStatus = None, check_cancelled: bool = True):
+    async def update(self, current: int = None, total: int = None, message: str = None, status: TaskStatus = None, file_progress: int = None, check_cancelled: bool = True):
         if check_cancelled and self._cancelled:
             raise CancelledError("Task was cancelled")
         if current is not None:
@@ -67,6 +63,8 @@ class Task:
             self.progress.message = message
         if status is not None:
             self.progress.status = status
+        if file_progress is not None:
+            self.progress.file_progress = file_progress
         await self._queue.put(self.progress)
 
     async def complete(self, message: str = "Completed"):

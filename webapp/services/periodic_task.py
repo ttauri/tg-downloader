@@ -118,17 +118,17 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
 
                     current_formatted = format_size(current_bytes)
                     total_formatted = format_size(total_bytes)
-                    pct = round(current_bytes / total_bytes * 100) if total_bytes > 0 else 0
+                    file_pct = round(current_bytes / total_bytes * 100) if total_bytes > 0 else 0
 
                     # Show appropriate message based on cancellation state
                     if stop_after_current:
-                        msg = f"Finishing {i}/{total}: {current_formatted}/{total_formatted} ({pct}%) - stopping after this file..."
+                        msg = f"Finishing {i}/{total}: {current_formatted}/{total_formatted} ({file_pct}%) - stopping after this file..."
                     else:
-                        msg = f"Downloading {i}/{total}: {current_formatted}/{total_formatted} ({pct}%) @ {speed_str}"
+                        msg = f"Downloading {i}/{total}: {current_formatted}/{total_formatted} ({file_pct}%) @ {speed_str}"
 
                     if task:
                         # Don't raise CancelledError - we want to finish the current file
-                        await task.update(current=i, total=total, message=msg, check_cancelled=False)
+                        await task.update(current=i, total=total, message=msg, file_progress=file_pct, check_cancelled=False)
 
                 if task:
                     await task.update(current=i, total=total, message=f"Starting {i}/{total}: {size_formatted}")

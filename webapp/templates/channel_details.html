@@ -394,7 +394,13 @@ function showProgress(title) {
 }
 
 function updateProgress(data) {
-    const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+    // Use file_progress for current file download, otherwise use overall progress
+    let pct;
+    if (data.file_progress !== undefined && data.file_progress > 0) {
+        pct = data.file_progress;
+    } else {
+        pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+    }
     document.getElementById('progress-bar').style.width = pct + '%';
     document.getElementById('progress-message').textContent = data.message;
     document.getElementById('progress-status').textContent = data.status;

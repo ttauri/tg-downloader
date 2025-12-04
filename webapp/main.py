@@ -216,6 +216,7 @@ async def active_tasks(channel_id: str):
                 "current": task.progress.current,
                 "total": task.progress.total,
                 "message": task.progress.message,
+                "file_progress": task.progress.file_progress,
             }
     return tasks
 
@@ -238,6 +239,7 @@ async def task_progress(task_id: str):
                 "total": progress.total,
                 "message": progress.message or "Starting...",
                 "error": progress.error,
+                "file_progress": progress.file_progress,
             }
             yield f"data: {json.dumps(data)}\n\n"
 
@@ -250,6 +252,7 @@ async def task_progress(task_id: str):
                     "total": progress.total,
                     "message": progress.message,
                     "error": progress.error,
+                    "file_progress": progress.file_progress,
                 }
                 yield f"data: {json.dumps(data)}\n\n"
         except asyncio.CancelledError:
