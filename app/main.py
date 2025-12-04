@@ -36,6 +36,7 @@ from .services.storage_service import (
     get_folder_stats,
     format_size as format_size_storage,
 )
+from .config import settings, ENV_FILE_PATH
 
 app = FastAPI()
 
@@ -384,3 +385,79 @@ async def media_list(
         "limit": limit,
         "items": media_items,
     }
+
+
+def read_env_file():
+    """Read current settings from env file."""
+    env_settings = {}
+    if ENV_FILE_PATH.exists():
+        for line in ENV_FILE_PATH.read_text().strip().split('\n'):
+            if '=' in line:
+                key, value = line.split('=', 1)
+                env_settings[key.strip()] = value.strip()
+    return env_settings
+
+
+def write_env_file(env_settings: dict):
+    """Write settings to env file."""
+    lines = [f"{key}={value}" for key, value in env_settings.items()]
+    ENV_FILE_PATH.write_text('\n'.join(lines) + '\n')
+
+
+@app.get("/settings/", response_class=HTMLResponse)
+async def settings_page(request: Request, message: str = None, error: bool = False):
+    """Display settings page."""
+    env_settings = read_env_file()
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "settings": env_settings,
+            "message": message,
+            "error": error,
+        },
+    )
+
+
+@app.post("/settings/", response_class=HTMLResponse)
+async def save_settings(
+    request: Request,
+    api_id: str = Form(...),
+    api_hash: str = Form(...),
+    phone: str = Form(...),
+    db_url: str = Form(...),
+    media_download_path: str = Form(...),
+    sorting_type: str = Form(...),
+):
+    """Save settings to env file."""
+    try:
+        env_settings = {
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "phone": phone,
+            "db_url": db_url,
+            "media_download_path": media_download_path,
+            "sorting_type": sorting_type,
+        }
+        write_env_file(env_settings)
+
+        return templates.TemplateResponse(
+            "settings.html",
+            {
+                "request": request,
+                "settings": env_settings,
+                "message": "Settings saved successfully. Restart the application for API changes to take effect.",
+                "error": False,
+            },
+        )
+    except Exception as e:
+        env_settings = read_env_file()
+        return templates.TemplateResponse(
+            "settings.html",
+            {
+                "request": request,
+                "settings": env_settings,
+                "message": f"Failed to save settings: {str(e)}",
+                "error": True,
+            },
+        )

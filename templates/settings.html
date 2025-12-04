@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Settings</h2>
+
+{% if message %}
+<div class="settings-message {% if error %}error{% else %}success{% endif %}">
+    {{ message }}
+</div>
+{% endif %}
+
+<form method="post" action="/settings/" class="settings-form">
+    <div class="settings-section">
+        <h3>Telegram API</h3>
+        <div class="form-group">
+            <label for="api_id">API ID</label>
+            <input type="text" id="api_id" name="api_id" value="{{ settings.api_id }}" required>
+            <span class="form-hint">Your Telegram API ID from my.telegram.org</span>
+        </div>
+        <div class="form-group">
+            <label for="api_hash">API Hash</label>
+            <input type="text" id="api_hash" name="api_hash" value="{{ settings.api_hash }}" required>
+            <span class="form-hint">Your Telegram API Hash from my.telegram.org</span>
+        </div>
+        <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input type="text" id="phone" name="phone" value="{{ settings.phone }}" required>
+            <span class="form-hint">Your phone number with country code (e.g., 14155551234)</span>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h3>Storage</h3>
+        <div class="form-group">
+            <label for="media_download_path">Media Download Path</label>
+            <input type="text" id="media_download_path" name="media_download_path" value="{{ settings.media_download_path }}" required>
+            <span class="form-hint">Directory where downloaded media will be stored</span>
+        </div>
+        <div class="form-group">
+            <label for="db_url">Database URL</label>
+            <input type="text" id="db_url" name="db_url" value="{{ settings.db_url }}" required>
+            <span class="form-hint">SQLite database path (e.g., sqlite:///./test.db)</span>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h3>Download Options</h3>
+        <div class="form-group">
+            <label for="sorting_type">Download Order</label>
+            <select id="sorting_type" name="sorting_type">
+                <option value="small" {% if settings.sorting_type == 'small' %}selected{% endif %}>Smallest first</option>
+                <option value="large" {% if settings.sorting_type == 'large' %}selected{% endif %}>Largest first</option>
+                <option value="none" {% if settings.sorting_type == 'none' %}selected{% endif %}>No sorting</option>
+            </select>
+            <div class="option-descriptions">
+                <div class="option-desc"><strong>Smallest first:</strong> Download smaller files first. Good for quickly getting many files, leaves large videos for later.</div>
+                <div class="option-desc"><strong>Largest first:</strong> Download largest files first. Prioritizes videos and large media.</div>
+                <div class="option-desc"><strong>No sorting:</strong> Download in the order they appear in the database (oldest messages first).</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="action-btn">Save Settings</button>
+    </div>
+</form>
+
+<div class="settings-note">
+    <strong>Note:</strong> All setting changes require an application restart to take effect.
+</div>
+{% endblock %}
