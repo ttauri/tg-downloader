@@ -48,6 +48,13 @@ class Task:
 
     def cancel(self):
         self._cancelled = True
+        # Push cancelled status to queue immediately so SSE stream ends
+        self.progress.status = TaskStatus.CANCELLED
+        self.progress.message = "Cancelled by user"
+        try:
+            self._queue.put_nowait(self.progress)
+        except asyncio.QueueFull:
+            pass  # Queue is full, event will be sent when space is available
 
     async def update(self, current: int = None, total: int = None, message: str = None, status: TaskStatus = None):
         if self._cancelled:
@@ -80,10 +87,20 @@ class Task:
 
     async def events(self) -> AsyncGenerator[TaskProgress, None]:
         while True:
-            progress = await self._queue.get()
-            yield progress
-            if progress.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
-                break
+            try:
+                # Timeout after 30 seconds of no updates - allows cleanup if task dies
+                progress = await asyncio.wait_for(self._queue.get(), timeout=30.0)
+                yield progress
+                if progress.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                    break
+            except asyncio.TimeoutError:
+                # Check if task was cancelled while waiting
+                if self._cancelled:
+                    self.progress.status = TaskStatus.CANCELLED
+                    yield self.progress
+                    break
+                # Otherwise just yield current progress as heartbeat
+                yield self.progress
 
 
 class CancelledError(Exception):
@@ -114,7 +131,7 @@ class TaskManager:
     def cleanup_completed(self):
         to_remove = [
             tid for tid, task in self._tasks.items()
-            if task.progress.status in (TaskStatus.COMPLETED, TaskStatus.FAILED)
+            if task.progress.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)
         ]
         for tid in to_remove:
             del self._tasks[tid]

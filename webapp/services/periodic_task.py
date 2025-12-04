@@ -4,6 +4,7 @@ from typing import Optional
 from webapp import schemas
 from webapp.config import settings
 from webapp.services.helper_functions import sanitize_dirname
+from webapp.services.storage_service import ensure_unsorted_folder
 from webapp.services.task_manager import Task, TaskStatus, CancelledError
 from webapp.crud import create_media, get_channel_by_id, get_all_not_downloaded_media, find_downloaded_by_file_id
 from webapp.database import SessionLocal
@@ -38,7 +39,11 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
     sorting_type = settings.sorting_type
     logger.info(f"Using {sorting_type} sorting for channel media")
     channel = get_channel_by_id(db=db, channel_id=channel_id)
-    channel_folder = sanitize_dirname(channel.channel_name)
+
+    # Download to _unsorted subfolder to avoid conflicts with classifier
+    download_path = ensure_unsorted_folder(channel.channel_name)
+    logger.info(f"Download path: {download_path}")
+
     media = get_all_not_downloaded_media(db, channel_id, order=sorting_type)
 
     try:
@@ -78,6 +83,10 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                 last_update_time = [download_start_time]  # Use list to allow mutation in callback
 
                 async def progress_callback(current_bytes, total_bytes):
+                    # Check for cancellation during download
+                    if task and task.is_cancelled:
+                        raise CancelledError("Download cancelled by user")
+
                     now = time.time()
                     # Throttle updates to max 2 per second
                     if now - last_update_time[0] < 0.5:
@@ -101,7 +110,7 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                     await task.update(current=i, total=total, message=f"Starting {i}/{total}: {size_formatted}")
 
                 media_path = await download_media_from_message(
-                    message, f"{settings.media_download_path}/{channel_folder}/",
+                    message, download_path,
                     progress_callback=progress_callback
                 )
                 filename = media_path.split("/")[-1]
@@ -119,6 +128,8 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                 await task.complete(msg)
     except CancelledError:
         logger.info("Download cancelled by user")
+        if task:
+            await task.set_cancelled("Download stopped by user")
     except Exception as e:
         logger.error(f"Download failed: {e}")
         if task:
@@ -187,6 +198,8 @@ async def fetch_messages_form_channel(channel_id: str, task: Optional[Task] = No
                 await task.complete(f"Fetched {count} media items")
     except CancelledError:
         logger.info("Fetch cancelled by user")
+        if task:
+            await task.set_cancelled("Fetch stopped by user")
     except Exception as e:
         logger.error(f"Fetch failed: {e}")
         if task:

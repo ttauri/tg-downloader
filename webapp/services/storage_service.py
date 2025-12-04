@@ -44,6 +44,23 @@ def get_channel_folder_path(channel_name: str) -> str:
     return os.path.join(settings.media_download_path, folder_name)
 
 
+# Subfolder for new downloads (before classification)
+UNSORTED_FOLDER = '_unsorted'
+
+
+def get_unsorted_folder_path(channel_name: str) -> str:
+    """Get the path to the _unsorted subfolder where new downloads go."""
+    channel_folder = get_channel_folder_path(channel_name)
+    return os.path.join(channel_folder, UNSORTED_FOLDER)
+
+
+def ensure_unsorted_folder(channel_name: str) -> str:
+    """Create the _unsorted folder if it doesn't exist and return its path."""
+    unsorted_path = get_unsorted_folder_path(channel_name)
+    os.makedirs(unsorted_path, exist_ok=True)
+    return unsorted_path
+
+
 def get_folder_stats(folder_path: str) -> dict:
     """
     Get statistics about files in a folder.

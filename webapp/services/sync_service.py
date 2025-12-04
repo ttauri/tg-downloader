@@ -12,8 +12,10 @@ from webapp.services.task_manager import Task, TaskStatus, CancelledError
 from webapp.services.storage_service import (
     compute_file_hash,
     get_channel_folder_path,
+    get_unsorted_folder_path,
     get_folder_stats,
     move_to_orphaned,
+    UNSORTED_FOLDER,
 )
 from webapp.logging_conf import logger
 
@@ -72,14 +74,28 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
         if task:
             await task.update(status=TaskStatus.RUNNING, message="Scanning files...")
 
-        # Get all files on disk
+        # Get all files on disk (including _unsorted subfolder)
         disk_files = {}
+
+        # Scan main folder (excluding special subfolders)
         for entry in os.scandir(folder_path):
             if entry.is_file() and not entry.name.startswith('.'):
                 disk_files[entry.name] = {
                     'path': entry.path,
                     'size': entry.stat().st_size,
                 }
+
+        # Also scan _unsorted subfolder where new downloads go
+        unsorted_path = get_unsorted_folder_path(channel_name)
+        if os.path.exists(unsorted_path):
+            for entry in os.scandir(unsorted_path):
+                if entry.is_file() and not entry.name.startswith('.'):
+                    # Only add if not already found in main folder
+                    if entry.name not in disk_files:
+                        disk_files[entry.name] = {
+                            'path': entry.path,
+                            'size': entry.stat().st_size,
+                        }
 
         # Get all downloaded media from DB
         downloaded_media = get_downloaded_media_by_channel(db, channel_id)
