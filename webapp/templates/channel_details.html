@@ -89,7 +89,7 @@
 <!-- Tabs -->
 <div class="tabs">
     <button type="button" class="tab-btn active" onclick="switchTab('actions')">Actions</button>
-    <button type="button" class="tab-btn" onclick="switchTab('storage')">Storage</button>
+    <button type="button" class="tab-btn" onclick="switchTab('stats')">Stats</button>
     <button type="button" class="tab-btn" onclick="switchTab('library')">Media Library</button>
 </div>
 
@@ -133,50 +133,76 @@
     </div>
 </div>
 
-<!-- Tab: Storage -->
-<div id="tab-storage" class="tab-content">
-    <div id="storage-loading" class="storage-loading">Loading storage info...</div>
-    <div id="storage-content" class="hidden">
-        <div class="storage-header">
-            <div class="storage-path-row">
-                <span class="storage-label">Path:</span>
-                <code id="storage-path" class="storage-path"></code>
-                <button type="button" class="copy-btn" onclick="copyPath()" title="Copy path">Copy</button>
-            </div>
-            <div id="storage-warning" class="storage-warning hidden">
-                <span class="warning-icon">!</span>
-                <span class="warning-text">Mismatch: DB and disk file counts differ</span>
-                <button type="button" class="action-btn small" onclick="switchTab('actions'); startSync();">Sync</button>
-            </div>
-        </div>
-        <div class="storage-stats">
-            <div class="storage-stat">
-                <span class="stat-value" id="storage-file-count">0</span>
-                <span class="stat-label">Files on disk</span>
-            </div>
-            <div class="storage-stat">
-                <span class="stat-value" id="storage-total-size">0 B</span>
-                <span class="stat-label">Total size</span>
-            </div>
-            <div class="storage-stat">
-                <span class="stat-value" id="db-downloaded-count">0</span>
-                <span class="stat-label">Downloaded (DB)</span>
+<!-- Tab: Stats -->
+<div id="tab-stats" class="tab-content">
+    <div id="stats-loading" class="storage-loading">Loading statistics...</div>
+    <div id="stats-content" class="hidden">
+        <!-- Content Overview -->
+        <div class="stats-section">
+            <h3>Content Overview</h3>
+            <div class="content-overview-grid">
+                <div class="overview-stat">
+                    <span class="overview-value" id="total-duration">-</span>
+                    <span class="overview-label">Total Video Duration</span>
+                </div>
+                <div class="overview-stat">
+                    <span class="overview-value" id="avg-duration">-</span>
+                    <span class="overview-label">Average Duration</span>
+                </div>
+                <div class="overview-stat">
+                    <span class="overview-value" id="videos-analyzed">-</span>
+                    <span class="overview-label">Videos Analyzed</span>
+                </div>
+                <div class="overview-stat">
+                    <span class="overview-value" id="duplicates-info">-</span>
+                    <span class="overview-label">Duplicates Detected</span>
+                </div>
             </div>
         </div>
-        <div class="extensions-section">
-            <span class="storage-label">Extensions:</span>
-            <div id="extensions-list" class="extensions-list"></div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+            <!-- Duration Distribution -->
+            <div class="chart-container">
+                <h3>Video Duration Distribution</h3>
+                <div class="chart-wrapper">
+                    <canvas id="duration-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Resolution Distribution -->
+            <div class="chart-container">
+                <h3>Resolution Distribution</h3>
+                <div class="chart-wrapper">
+                    <canvas id="resolution-chart"></canvas>
+                </div>
+            </div>
         </div>
-        <div class="files-section">
-            <button type="button" class="collapsible" onclick="toggleFileList()">
-                <span id="files-toggle-icon">+</span>
-                <span>File List (<span id="files-count">0</span> files)</span>
-            </button>
-            <div id="files-list" class="files-list hidden"></div>
+
+        <!-- Activity Timeline -->
+        <div class="stats-section">
+            <h3>Activity Timeline (Last 12 Months)</h3>
+            <div class="chart-container-wide">
+                <div class="chart-wrapper-wide">
+                    <canvas id="activity-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Content -->
+        <div class="top-content-row">
+            <div class="top-content-section">
+                <h3>Longest Videos</h3>
+                <div id="longest-videos" class="top-list"></div>
+            </div>
+            <div class="top-content-section">
+                <h3>Largest Files</h3>
+                <div id="largest-files" class="top-list"></div>
+            </div>
         </div>
     </div>
-    <div id="storage-empty" class="storage-empty hidden">
-        <span>No folder exists yet. Download media to create it.</span>
+    <div id="stats-empty" class="storage-empty hidden">
+        <span>No data available. Download media first.</span>
     </div>
 </div>
 
@@ -233,8 +259,13 @@ const channelId = "{{ channel.channel_id }}";
 let eventSource = null;
 let currentTaskId = null;
 let currentBtnId = null;
-let storageLoaded = false;
+let statsLoaded = false;
 let libraryLoaded = false;
+
+// Chart instances
+let durationChart = null;
+let resolutionChart = null;
+let activityChart = null;
 
 // Tab switching
 function switchTab(tabName) {
@@ -247,9 +278,9 @@ function switchTab(tabName) {
     document.getElementById('tab-' + tabName).classList.add('active');
 
     // Lazy load content
-    if (tabName === 'storage' && !storageLoaded) {
-        loadStorageInfo();
-        storageLoaded = true;
+    if (tabName === 'stats' && !statsLoaded) {
+        loadContentStats();
+        statsLoaded = true;
     }
     if (tabName === 'library' && !libraryLoaded) {
         loadMediaList();
@@ -414,65 +445,182 @@ async function resetChannel() {
     }
 }
 
-// Storage Panel Functions
-let storagePath = '';
-
-async function loadStorageInfo() {
+// Stats Panel Functions
+async function loadContentStats() {
     try {
-        const response = await fetch('/storage_info/' + channelId);
+        const response = await fetch('/content_stats/' + channelId);
         const data = await response.json();
 
-        document.getElementById('storage-loading').classList.add('hidden');
+        document.getElementById('stats-loading').classList.add('hidden');
 
         if (data.error) {
-            document.getElementById('storage-empty').classList.remove('hidden');
-            document.getElementById('storage-empty').querySelector('span').textContent = data.error;
+            document.getElementById('stats-empty').classList.remove('hidden');
+            document.getElementById('stats-empty').querySelector('span').textContent = data.error;
             return;
         }
 
-        if (!data.exists) {
-            document.getElementById('storage-empty').classList.remove('hidden');
+        // Check if we have any data
+        if (data.video_count_with_duration === 0 && Object.keys(data.activity_timeline).length === 0) {
+            document.getElementById('stats-empty').classList.remove('hidden');
             return;
         }
 
-        document.getElementById('storage-content').classList.remove('hidden');
-        storagePath = data.path;
+        document.getElementById('stats-content').classList.remove('hidden');
 
-        document.getElementById('storage-path').textContent = data.path;
-        document.getElementById('storage-file-count').textContent = data.file_count;
-        document.getElementById('storage-total-size').textContent = data.total_size_formatted;
-        document.getElementById('db-downloaded-count').textContent = data.db_downloaded_count;
-        document.getElementById('files-count').textContent = data.file_count;
+        // Update overview stats
+        document.getElementById('total-duration').textContent = data.total_duration_formatted;
+        document.getElementById('avg-duration').textContent = data.avg_duration_formatted;
+        document.getElementById('videos-analyzed').textContent = data.video_count_with_duration;
+        document.getElementById('duplicates-info').textContent =
+            data.duplicates_count + ' (' + data.duplicates_size_formatted + ')';
 
-        // Show warning if mismatch
-        if (data.mismatch) {
-            document.getElementById('storage-warning').classList.remove('hidden');
-        }
+        // Create Duration Distribution Chart
+        const durationCtx = document.getElementById('duration-chart').getContext('2d');
+        const durationLabels = Object.keys(data.duration_distribution);
+        const durationValues = Object.values(data.duration_distribution);
 
-        // Render extensions
-        const extList = document.getElementById('extensions-list');
-        extList.innerHTML = '';
-        for (const [ext, info] of Object.entries(data.extensions)) {
-            const tag = document.createElement('span');
-            tag.className = 'ext-tag';
-            tag.textContent = ext + ' (' + info.count + ', ' + info.size_formatted + ')';
-            extList.appendChild(tag);
-        }
+        if (durationChart) durationChart.destroy();
+        durationChart = new Chart(durationCtx, {
+            type: 'bar',
+            data: {
+                labels: durationLabels,
+                datasets: [{
+                    label: 'Videos',
+                    data: durationValues,
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                resizeDelay: 0,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                }
+            }
+        });
 
-        // Render file list
-        const filesList = document.getElementById('files-list');
-        filesList.innerHTML = '';
-        for (const file of data.files) {
-            const row = document.createElement('div');
-            row.className = 'file-row';
-            row.innerHTML = '<span class="file-name">' + escapeHtml(file.name) + '</span>' +
-                           '<span class="file-size">' + file.size_formatted + '</span>';
-            filesList.appendChild(row);
-        }
+        // Create Resolution Distribution Chart
+        const resolutionCtx = document.getElementById('resolution-chart').getContext('2d');
+        const resLabels = Object.keys(data.resolution_distribution);
+        const resValues = Object.values(data.resolution_distribution);
+
+        // Filter out zero values for cleaner chart
+        const filteredRes = resLabels.map((label, i) => ({label, value: resValues[i]}))
+            .filter(item => item.value > 0);
+
+        if (resolutionChart) resolutionChart.destroy();
+        resolutionChart = new Chart(resolutionCtx, {
+            type: 'doughnut',
+            data: {
+                labels: filteredRes.map(r => r.label),
+                datasets: [{
+                    data: filteredRes.map(r => r.value),
+                    backgroundColor: [
+                        'rgba(239, 68, 68, 0.8)',
+                        'rgba(249, 115, 22, 0.8)',
+                        'rgba(234, 179, 8, 0.8)',
+                        'rgba(34, 197, 94, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(139, 92, 246, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                resizeDelay: 0,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 12 }
+                    }
+                }
+            }
+        });
+
+        // Create Activity Timeline Chart
+        const activityCtx = document.getElementById('activity-chart').getContext('2d');
+        const activityLabels = Object.keys(data.activity_timeline);
+        const activityValues = Object.values(data.activity_timeline);
+
+        if (activityChart) activityChart.destroy();
+        activityChart = new Chart(activityCtx, {
+            type: 'line',
+            data: {
+                labels: activityLabels,
+                datasets: [{
+                    label: 'Posts',
+                    data: activityValues,
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                resizeDelay: 0,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                }
+            }
+        });
+
+        // Render top content lists
+        renderTopList('longest-videos', data.longest_videos, 'duration');
+        renderTopList('largest-files', data.largest_files, 'size');
+
     } catch (error) {
-        document.getElementById('storage-loading').classList.add('hidden');
-        document.getElementById('storage-empty').classList.remove('hidden');
-        document.getElementById('storage-empty').querySelector('span').textContent = 'Failed to load storage info';
+        document.getElementById('stats-loading').classList.add('hidden');
+        document.getElementById('stats-empty').classList.remove('hidden');
+        document.getElementById('stats-empty').querySelector('span').textContent = 'Failed to load statistics';
+    }
+}
+
+function renderTopList(elementId, items, type) {
+    const container = document.getElementById(elementId);
+    container.innerHTML = '';
+
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="top-item empty">No data</div>';
+        return;
+    }
+
+    for (const item of items) {
+        const div = document.createElement('div');
+        div.className = 'top-item';
+
+        const name = item.filename || 'Unknown';
+        const truncatedName = name.length > 40 ? name.substring(0, 40) + '...' : name;
+
+        let badge = '';
+        if (type === 'duration') {
+            badge = item.duration_formatted || '-';
+        } else {
+            badge = item.size_formatted || '-';
+        }
+
+        div.innerHTML = `
+            <span class="top-item-name" title="${escapeHtml(name)}">${escapeHtml(truncatedName)}</span>
+            <span class="top-item-badge">${badge}</span>
+        `;
+        container.appendChild(div);
     }
 }
 
@@ -480,26 +628,6 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-
-function copyPath() {
-    navigator.clipboard.writeText(storagePath).then(() => {
-        const btn = document.querySelector('.copy-btn');
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-    });
-}
-
-function toggleFileList() {
-    const list = document.getElementById('files-list');
-    const icon = document.getElementById('files-toggle-icon');
-    if (list.classList.contains('hidden')) {
-        list.classList.remove('hidden');
-        icon.textContent = '-';
-    } else {
-        list.classList.add('hidden');
-        icon.textContent = '+';
-    }
 }
 
 async function startSync() {

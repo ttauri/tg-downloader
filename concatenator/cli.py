@@ -10,7 +10,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
-from concatenator.utils import cleanup_temp_directory, sort_videos_by_orientation, sort_videos_by_bitrate, split_files_into_folders, get_video_info, format_duration, format_size, format_bitrate
+from concatenator.utils import cleanup_temp_directory, sort_videos_by_orientation, sort_videos_by_bitrate, split_files_into_folders, get_video_info, format_duration, format_size, format_bitrate, sort_videos_pipeline
 from concatenator.core import VideoConcatenator
 
 def main():
@@ -32,8 +32,9 @@ def main():
     )
     parser.add_argument("--info", action="store_true", help="Show information about video files in the directory")
 
-    parser.add_argument("--sort", choices=['bitrate', 'split', 'orientation'], help="Sort videos by bitrate or split into folders")
-    parser.add_argument("--max-files", help="Amount of files in forder when splitting", type=int)
+    parser.add_argument("--sort", choices=['bitrate', 'split', 'orientation', 'pipeline'], help="Sort videos: bitrate, orientation, split into folders, or pipeline (orientation->duration->quality)")
+    parser.add_argument("--max-files", help="Amount of files in folder when splitting", type=int)
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without moving files (for --sort pipeline)")
 
     args = parser.parse_args()
 
@@ -91,6 +92,10 @@ def main():
         print("Sorting videos by orientation...")
         sort_videos_by_orientation(args.input_directory)
         print("Sorting complete. Videos are now in 'horizontal' and 'vertical' subdirectories.")
+        return
+    elif args.sort == 'pipeline':
+        print("Sorting videos by orientation -> duration -> quality...")
+        sort_videos_pipeline(args.input_directory, dry_run=args.dry_run)
         return
 
     # Get list of video files in the input directory

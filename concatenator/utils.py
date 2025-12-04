@@ -441,3 +441,195 @@ def format_bitrate(bitrate):
         return f"{bitrate / 1000:.2f} Kbps"
     else:
         return f"{bitrate / 1000000:.2f} Mbps"
+
+
+def get_optimal_bitrate(video_stream):
+    """
+    Calculate optimal bitrate based on resolution and frame rate.
+
+    Uses realistic bitrates for h264/h265 encoded video:
+    - 1080p@30fps: ~8 Mbps optimal
+    - 720p@30fps: ~3.6 Mbps optimal
+    - 480p@30fps: ~1.6 Mbps optimal
+
+    Formula: width * height * fps * 0.13 (compression factor for modern codecs)
+    """
+    width = int(video_stream['width'])
+    height = int(video_stream['height'])
+    fps_str = video_stream.get('r_frame_rate', '30/1')
+    if '/' in fps_str:
+        f, s = fps_str.split('/')
+        frame_rate = int(f) / int(s) if int(s) != 0 else 30
+    else:
+        frame_rate = float(fps_str)
+    # 0.13 factor for h264/h265 encoded video
+    # 1080p@30fps = 1920*1080*30*0.13 = ~8 Mbps
+    optimal_bitrate = width * height * frame_rate * 0.13
+    return optimal_bitrate
+
+
+def sort_videos_pipeline(input_directory, dry_run=False):
+    """
+    Sort videos by orientation, then duration, then quality.
+
+    Structure:
+        horizontal/
+            short/    (<60s)
+                high/
+                medium/
+                low/
+            medium/   (1-5 min)
+                high/
+                medium/
+                low/
+            long/     (>5 min)
+                high/
+                medium/
+                low/
+        vertical/
+            (same structure)
+
+    Quality is based on actual bitrate vs optimal bitrate:
+        - high: >= 100% of optimal
+        - medium: >= 50% of optimal
+        - low: < 50% of optimal
+    """
+    ffmpeg = FFmpegWrapper()
+
+    # Duration thresholds (in seconds)
+    SHORT_MAX = 60        # < 60s
+    MEDIUM_MAX = 300      # 60s - 5min
+    # > 5min = long
+
+    # Get all video files
+    video_extensions = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm')
+    video_files = [f for f in os.listdir(input_directory)
+                   if f.lower().endswith(video_extensions) and os.path.isfile(os.path.join(input_directory, f))]
+
+    if not video_files:
+        print("No video files found.")
+        return
+
+    print(f"Found {len(video_files)} video files to sort")
+
+    # Analyze and categorize each video
+    categorized = []
+    errors = []
+
+    for video_file in video_files:
+        file_path = os.path.join(input_directory, video_file)
+        try:
+            probe = ffmpeg.probe(file_path)
+            if probe is None:
+                errors.append((video_file, "Invalid or corrupted file"))
+                continue
+
+            video_stream = next(
+                (s for s in probe['streams'] if s['codec_type'] == 'video'),
+                None
+            )
+
+            if not video_stream:
+                errors.append((video_file, "No video stream found"))
+                continue
+
+            # Get dimensions
+            width = int(video_stream['width'])
+            height = int(video_stream['height'])
+
+            # Get duration
+            duration = float(probe['format'].get('duration', 0))
+            if duration == 0:
+                duration = float(video_stream.get('duration', 0))
+
+            # Get bitrate
+            bitrate = int(video_stream.get('bit_rate', 0))
+            if bitrate == 0:
+                bitrate = int(probe['format'].get('bit_rate', 0))
+
+            # Calculate optimal bitrate
+            optimal = get_optimal_bitrate(video_stream)
+
+            # Determine orientation
+            orientation = 'horizontal' if width >= height else 'vertical'
+
+            # Determine duration category
+            if duration < SHORT_MAX:
+                duration_cat = 'short'
+            elif duration < MEDIUM_MAX:
+                duration_cat = 'medium'
+            else:
+                duration_cat = 'long'
+
+            # Determine quality category
+            if optimal > 0:
+                quality_ratio = bitrate / optimal
+                if quality_ratio >= 1.0:
+                    quality_cat = 'high'
+                elif quality_ratio >= 0.5:
+                    quality_cat = 'medium'
+                else:
+                    quality_cat = 'low'
+            else:
+                quality_cat = 'medium'  # Default if can't calculate
+
+            categorized.append({
+                'file': video_file,
+                'path': file_path,
+                'orientation': orientation,
+                'duration_cat': duration_cat,
+                'quality_cat': quality_cat,
+                'width': width,
+                'height': height,
+                'duration': duration,
+                'bitrate': bitrate,
+                'optimal': optimal
+            })
+
+        except Exception as e:
+            errors.append((video_file, str(e)))
+
+    if errors:
+        print(f"\nWarning: {len(errors)} files could not be analyzed:")
+        for filename, error in errors[:5]:
+            print(f"  - {filename}: {error}")
+        if len(errors) > 5:
+            print(f"  ... and {len(errors) - 5} more")
+
+    if not categorized:
+        print("No valid videos to sort.")
+        return
+
+    # Count by category for summary
+    summary = {}
+    for vid in categorized:
+        key = f"{vid['orientation']}/{vid['duration_cat']}/{vid['quality_cat']}"
+        summary[key] = summary.get(key, 0) + 1
+
+    # Move files
+    moved = 0
+    for vid in categorized:
+        dest_dir = os.path.join(
+            input_directory,
+            vid['orientation'],
+            vid['duration_cat'],
+            vid['quality_cat']
+        )
+        dest_path = os.path.join(dest_dir, vid['file'])
+
+        if dry_run:
+            print(f"Would move: {vid['file']} -> {vid['orientation']}/{vid['duration_cat']}/{vid['quality_cat']}/")
+        else:
+            os.makedirs(dest_dir, exist_ok=True)
+            shutil.move(vid['path'], dest_path)
+            moved += 1
+
+    # Print summary
+    print(f"\n{'Would sort' if dry_run else 'Sorted'} {len(categorized)} videos:")
+    print("-" * 50)
+
+    for key in sorted(summary.keys()):
+        print(f"  {key}: {summary[key]} files")
+
+    if not dry_run:
+        print(f"\nMoved {moved} files successfully.")

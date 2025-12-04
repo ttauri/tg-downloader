@@ -15,6 +15,7 @@ from .crud import (
     get_available_channels,
     get_channel_by_id,
     get_channel_media_stats,
+    get_channel_content_stats,
     get_subscribed_channels,
     set_channel_subscription,
     get_all_media,
@@ -338,6 +339,50 @@ def format_duration(seconds):
     if hours > 0:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes}:{secs:02d}"
+
+
+def format_duration_long(seconds):
+    """Format duration in seconds to human readable string like '2h 30m' or '45m' or '30s'."""
+    if not seconds:
+        return "0s"
+    seconds = int(seconds)
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    if hours > 0:
+        if minutes > 0:
+            return f"{hours}h {minutes}m"
+        return f"{hours}h"
+    if minutes > 0:
+        if secs > 0:
+            return f"{minutes}m {secs}s"
+        return f"{minutes}m"
+    return f"{secs}s"
+
+
+@app.get("/content_stats/{channel_id}")
+async def content_stats(channel_id: str, db: Session = Depends(get_db)):
+    """Get detailed content statistics for a channel."""
+    channel = get_channel_by_id(db, channel_id)
+    if not channel:
+        return {"error": "Channel not found"}
+
+    stats = get_channel_content_stats(db, channel_id)
+
+    # Format durations for display
+    stats['total_duration_formatted'] = format_duration_long(stats['total_duration_seconds'])
+    stats['avg_duration_formatted'] = format_duration_long(stats['avg_duration_seconds'])
+    stats['duplicates_size_formatted'] = format_size(stats['duplicates_size'])
+
+    # Format top content
+    for video in stats['longest_videos']:
+        video['duration_formatted'] = format_duration(video['duration'])
+        video['size_formatted'] = format_size(video['size']) if video['size'] else None
+
+    for file in stats['largest_files']:
+        file['size_formatted'] = format_size(file['size']) if file['size'] else None
+
+    return stats
 
 
 @app.get("/media_list/{channel_id}")
