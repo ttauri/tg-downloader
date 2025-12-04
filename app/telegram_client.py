@@ -15,10 +15,10 @@ async def fetch_channels_list():
     return channels
 
 
-async def download_media_from_message(message, path):
+async def download_media_from_message(message, path, progress_callback=None):
     # For now only videos
     if isinstance(message.media, MessageMediaDocument):
-        file_path = await message.download_media(file=path)
+        file_path = await message.download_media(file=path, progress_callback=progress_callback)
         return file_path
     return None
 

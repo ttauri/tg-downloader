@@ -194,6 +194,16 @@
             <option value="true">Downloaded</option>
             <option value="false">Pending</option>
         </select>
+        <select id="sort-by-filter" onchange="loadMediaList()">
+            <option value="date">Sort by Date</option>
+            <option value="size">Sort by Size</option>
+            <option value="duration">Sort by Duration</option>
+            <option value="name">Sort by Name</option>
+        </select>
+        <select id="sort-order-filter" onchange="loadMediaList()">
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+        </select>
         <span id="media-count" class="media-count"></span>
     </div>
     <div id="media-list-loading" class="storage-loading">Loading media...</div>
@@ -518,13 +528,18 @@ let mediaOffset = 0;
 const mediaLimit = 50;
 let mediaTotal = 0;
 
-async function loadMediaList() {
+async function loadMediaList(resetOffset = true) {
+    if (resetOffset) mediaOffset = 0;
+
     const typeFilter = document.getElementById('media-type-filter').value;
     const downloadFilter = document.getElementById('download-filter').value;
+    const sortBy = document.getElementById('sort-by-filter').value;
+    const sortOrder = document.getElementById('sort-order-filter').value;
 
     let url = `/media_list/${channelId}?limit=${mediaLimit}&offset=${mediaOffset}`;
     if (typeFilter) url += `&media_type=${typeFilter}`;
     if (downloadFilter) url += `&downloaded=${downloadFilter}`;
+    url += `&sort_by=${sortBy}&sort_order=${sortOrder}`;
 
     try {
         const response = await fetch(url);
@@ -606,14 +621,14 @@ function updatePagination() {
 function prevPage() {
     if (mediaOffset > 0) {
         mediaOffset -= mediaLimit;
-        loadMediaList();
+        loadMediaList(false);
     }
 }
 
 function nextPage() {
     if (mediaOffset + mediaLimit < mediaTotal) {
         mediaOffset += mediaLimit;
-        loadMediaList();
+        loadMediaList(false);
     }
 }
 </script>

@@ -344,9 +344,11 @@ async def media_list(
     offset: int = Query(0, ge=0),
     media_type: str = Query(None),
     downloaded: bool = Query(None),
+    sort_by: str = Query("date"),
+    sort_order: str = Query("desc"),
 ):
     """Get paginated media list with metadata for a channel."""
-    from sqlalchemy import and_
+    from sqlalchemy import and_, asc, desc
 
     query = db.query(Media).filter(Media.tg_channel_id == channel_id)
 
@@ -355,8 +357,19 @@ async def media_list(
     if downloaded is not None:
         query = query.filter(Media.is_downloaded == downloaded)
 
+    # Apply sorting
+    sort_func = desc if sort_order == "desc" else asc
+    if sort_by == "size":
+        query = query.order_by(sort_func(Media.size))
+    elif sort_by == "duration":
+        query = query.order_by(sort_func(Media.duration))
+    elif sort_by == "name":
+        query = query.order_by(sort_func(Media.original_filename))
+    else:  # default: date
+        query = query.order_by(sort_func(Media.message_date))
+
     total = query.count()
-    items = query.order_by(Media.message_date.desc()).offset(offset).limit(limit).all()
+    items = query.offset(offset).limit(limit).all()
 
     media_items = []
     for m in items:

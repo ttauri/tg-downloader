@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 from app import schemas
@@ -8,6 +9,28 @@ from app.crud import create_media, get_channel_by_id, get_all_not_downloaded_med
 from app.database import SessionLocal
 from app.telegram_client import client, download_media_from_message
 from app.logging_conf import logger
+
+
+def format_speed(bytes_per_second):
+    """Format download speed to human readable string."""
+    if bytes_per_second < 1024:
+        return f"{bytes_per_second:.0f} B/s"
+    elif bytes_per_second < 1024 * 1024:
+        return f"{bytes_per_second / 1024:.1f} KB/s"
+    else:
+        return f"{bytes_per_second / (1024 * 1024):.2f} MB/s"
+
+
+def format_size(size_bytes):
+    """Format size in bytes to human readable string."""
+    if size_bytes < 1024:
+        return f"{size_bytes:.0f} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.2f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
 async def download_media_from_channel(channel_id: int, task: Optional[Task] = None):
@@ -46,15 +69,40 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                         continue
 
                 message = await client.get_messages(int(channel_id), ids=m.tg_message_id)
-                size_mb = round(m.size / (1024 * 1024), 3)
-                msg = f"Downloading {i}/{total}: {size_mb}MB"
-                logger.info(f"Downloading media {i} of {total} ID:{m.id}, Size:{size_mb}MB")
+                file_size = m.size or 0
+                size_formatted = format_size(file_size)
+                logger.info(f"Downloading media {i} of {total} ID:{m.id}, Size:{size_formatted}")
+
+                # Progress tracking for current file
+                download_start_time = time.time()
+                last_update_time = [download_start_time]  # Use list to allow mutation in callback
+
+                async def progress_callback(current_bytes, total_bytes):
+                    now = time.time()
+                    # Throttle updates to max 2 per second
+                    if now - last_update_time[0] < 0.5:
+                        return
+                    last_update_time[0] = now
+
+                    elapsed = now - download_start_time
+                    speed = current_bytes / elapsed if elapsed > 0 else 0
+                    speed_str = format_speed(speed)
+
+                    current_formatted = format_size(current_bytes)
+                    total_formatted = format_size(total_bytes)
+                    pct = round(current_bytes / total_bytes * 100) if total_bytes > 0 else 0
+
+                    msg = f"Downloading {i}/{total}: {current_formatted}/{total_formatted} ({pct}%) @ {speed_str}"
+
+                    if task:
+                        await task.update(current=i, total=total, message=msg)
 
                 if task:
-                    await task.update(current=i, total=total, message=msg)
+                    await task.update(current=i, total=total, message=f"Starting {i}/{total}: {size_formatted}")
 
                 media_path = await download_media_from_message(
-                    message, f"{settings.media_download_path}/{channel_folder}/"
+                    message, f"{settings.media_download_path}/{channel_folder}/",
+                    progress_callback=progress_callback
                 )
                 filename = media_path.split("/")[-1]
                 logger.info(f"{media_path} finished. Filename: {filename}")
