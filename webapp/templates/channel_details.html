@@ -87,6 +87,7 @@
 <div class="tabs">
     <button type="button" class="tab-btn active" onclick="switchTab('actions')">Actions</button>
     <button type="button" class="tab-btn" onclick="switchTab('stats')">Stats</button>
+    <button type="button" class="tab-btn" onclick="switchTab('options')">Download Options</button>
     <button type="button" class="tab-btn" onclick="switchTab('library')">Media Library</button>
 </div>
 
@@ -132,6 +133,16 @@
 
 <!-- Tab: Stats -->
 <div id="tab-stats" class="tab-content">
+    <div class="stats-filter">
+        <label class="stats-toggle">
+            <input type="radio" name="stats-scope" value="downloaded" checked onchange="loadContentStats()">
+            <span>Downloaded</span>
+        </label>
+        <label class="stats-toggle">
+            <input type="radio" name="stats-scope" value="all" onchange="loadContentStats()">
+            <span>All Files</span>
+        </label>
+    </div>
     <div id="stats-loading" class="storage-loading">Loading statistics...</div>
     <div id="stats-content" class="hidden">
         <!-- Content Overview -->
@@ -178,7 +189,7 @@
 
         <!-- Activity Timeline -->
         <div class="stats-section">
-            <h3>Activity Timeline (Last 12 Months)</h3>
+            <h3>Activity Timeline</h3>
             <div class="chart-container-wide">
                 <div class="chart-wrapper-wide">
                     <canvas id="activity-chart"></canvas>
@@ -200,6 +211,130 @@
     </div>
     <div id="stats-empty" class="storage-empty hidden">
         <span>No data available. Download media first.</span>
+    </div>
+</div>
+
+<!-- Tab: Download Options -->
+<div id="tab-options" class="tab-content">
+    <div id="options-loading" class="storage-loading">Loading options...</div>
+    <div id="options-content" class="hidden">
+        <p class="options-description">Configure which files to download based on resolution and duration. Uncheck to skip files matching that criteria.</p>
+
+        <div class="options-grid">
+            <!-- Resolution Options -->
+            <div class="options-section">
+                <h3>Resolution Filter</h3>
+                <p class="options-hint">Select which video resolutions to download</p>
+                <div class="options-list">
+                    <label class="option-item">
+                        <input type="checkbox" name="res_360p" checked>
+                        <span class="option-label">360p and below</span>
+                        <span class="option-count" id="count-res-360p">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="res_480p" checked>
+                        <span class="option-label">480p</span>
+                        <span class="option-count" id="count-res-480p">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="res_720p" checked>
+                        <span class="option-label">720p</span>
+                        <span class="option-count" id="count-res-720p">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="res_1080p" checked>
+                        <span class="option-label">1080p</span>
+                        <span class="option-count" id="count-res-1080p">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="res_1440p" checked>
+                        <span class="option-label">1440p</span>
+                        <span class="option-count" id="count-res-1440p">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="res_4k" checked>
+                        <span class="option-label">4K and above</span>
+                        <span class="option-count" id="count-res-4k">-</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Duration Options -->
+            <div class="options-section">
+                <h3>Duration Filter</h3>
+                <p class="options-hint">Select which video durations to download</p>
+                <div class="options-list">
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_30s" checked>
+                        <span class="option-label">Under 30 seconds</span>
+                        <span class="option-count" id="count-dur-30s">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_1m" checked>
+                        <span class="option-label">30s - 1 minute</span>
+                        <span class="option-count" id="count-dur-1m">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_5m" checked>
+                        <span class="option-label">1 - 5 minutes</span>
+                        <span class="option-count" id="count-dur-5m">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_15m" checked>
+                        <span class="option-label">5 - 15 minutes</span>
+                        <span class="option-count" id="count-dur-15m">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_30m" checked>
+                        <span class="option-label">15 - 30 minutes</span>
+                        <span class="option-count" id="count-dur-30m">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_1h" checked>
+                        <span class="option-label">30 minutes - 1 hour</span>
+                        <span class="option-count" id="count-dur-1h">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="dur_long" checked>
+                        <span class="option-label">Over 1 hour</span>
+                        <span class="option-count" id="count-dur-long">-</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Media Type Options -->
+            <div class="options-section">
+                <h3>Media Type Filter</h3>
+                <p class="options-hint">Select which media types to download</p>
+                <div class="options-list">
+                    <label class="option-item">
+                        <input type="checkbox" name="type_video" checked>
+                        <span class="option-label">Videos</span>
+                        <span class="option-count" id="count-type-video">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="type_image" checked>
+                        <span class="option-label">Images</span>
+                        <span class="option-count" id="count-type-image">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="type_audio" checked>
+                        <span class="option-label">Audio</span>
+                        <span class="option-count" id="count-type-audio">-</span>
+                    </label>
+                    <label class="option-item">
+                        <input type="checkbox" name="type_other" checked>
+                        <span class="option-label">Other files</span>
+                        <span class="option-count" id="count-type-other">-</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="options-actions">
+            <span id="options-status" class="options-status"></span>
+            <button type="button" class="action-btn" onclick="saveDownloadOptions()">Save Options</button>
+        </div>
     </div>
 </div>
 
@@ -259,6 +394,7 @@ let currentBtnId = null;
 let currentOperation = null;
 let statsLoaded = false;
 let libraryLoaded = false;
+let optionsLoaded = false;
 
 // Chart instances
 let durationChart = null;
@@ -376,6 +512,10 @@ function switchTab(tabName) {
     if (tabName === 'stats' && !statsLoaded) {
         loadContentStats();
         statsLoaded = true;
+    }
+    if (tabName === 'options' && !optionsLoaded) {
+        loadDownloadOptions();
+        optionsLoaded = true;
     }
     if (tabName === 'library' && !libraryLoaded) {
         loadMediaList();
@@ -545,8 +685,16 @@ async function resetChannel() {
 
 // Stats Panel Functions
 async function loadContentStats() {
+    // Get selected scope
+    const scope = document.querySelector('input[name="stats-scope"]:checked').value;
+
+    // Show loading, hide content
+    document.getElementById('stats-loading').classList.remove('hidden');
+    document.getElementById('stats-content').classList.add('hidden');
+    document.getElementById('stats-empty').classList.add('hidden');
+
     try {
-        const response = await fetch('/content_stats/' + channelId);
+        const response = await fetch('/content_stats/' + channelId + '?scope=' + scope);
         const data = await response.json();
 
         document.getElementById('stats-loading').classList.add('hidden');
@@ -560,6 +708,8 @@ async function loadContentStats() {
         // Check if we have any data
         if (data.video_count_with_duration === 0 && Object.keys(data.activity_timeline).length === 0) {
             document.getElementById('stats-empty').classList.remove('hidden');
+            document.getElementById('stats-empty').querySelector('span').textContent =
+                scope === 'downloaded' ? 'No downloaded files yet.' : 'No files in channel.';
             return;
         }
 
@@ -860,9 +1010,157 @@ function nextPage() {
     }
 }
 
+// Download Options Functions
+async function loadDownloadOptions() {
+    try {
+        const response = await fetch('/download_options/' + channelId);
+        const data = await response.json();
+
+        document.getElementById('options-loading').classList.add('hidden');
+        document.getElementById('options-content').classList.remove('hidden');
+
+        // Set checkbox states from saved options
+        const options = data.options || {};
+
+        // Resolution options (default all checked)
+        setCheckbox('res_360p', options.res_360p !== false);
+        setCheckbox('res_480p', options.res_480p !== false);
+        setCheckbox('res_720p', options.res_720p !== false);
+        setCheckbox('res_1080p', options.res_1080p !== false);
+        setCheckbox('res_1440p', options.res_1440p !== false);
+        setCheckbox('res_4k', options.res_4k !== false);
+
+        // Duration options (default all checked)
+        setCheckbox('dur_30s', options.dur_30s !== false);
+        setCheckbox('dur_1m', options.dur_1m !== false);
+        setCheckbox('dur_5m', options.dur_5m !== false);
+        setCheckbox('dur_15m', options.dur_15m !== false);
+        setCheckbox('dur_30m', options.dur_30m !== false);
+        setCheckbox('dur_1h', options.dur_1h !== false);
+        setCheckbox('dur_long', options.dur_long !== false);
+
+        // Media type options (default all checked)
+        setCheckbox('type_video', options.type_video !== false);
+        setCheckbox('type_image', options.type_image !== false);
+        setCheckbox('type_audio', options.type_audio !== false);
+        setCheckbox('type_other', options.type_other !== false);
+
+        // Update counts from stats
+        const counts = data.counts || {};
+
+        // Resolution counts
+        document.getElementById('count-res-360p').textContent = counts.res_360p || 0;
+        document.getElementById('count-res-480p').textContent = counts.res_480p || 0;
+        document.getElementById('count-res-720p').textContent = counts.res_720p || 0;
+        document.getElementById('count-res-1080p').textContent = counts.res_1080p || 0;
+        document.getElementById('count-res-1440p').textContent = counts.res_1440p || 0;
+        document.getElementById('count-res-4k').textContent = counts.res_4k || 0;
+
+        // Duration counts
+        document.getElementById('count-dur-30s').textContent = counts.dur_30s || 0;
+        document.getElementById('count-dur-1m').textContent = counts.dur_1m || 0;
+        document.getElementById('count-dur-5m').textContent = counts.dur_5m || 0;
+        document.getElementById('count-dur-15m').textContent = counts.dur_15m || 0;
+        document.getElementById('count-dur-30m').textContent = counts.dur_30m || 0;
+        document.getElementById('count-dur-1h').textContent = counts.dur_1h || 0;
+        document.getElementById('count-dur-long').textContent = counts.dur_long || 0;
+
+        // Media type counts
+        document.getElementById('count-type-video').textContent = counts.type_video || 0;
+        document.getElementById('count-type-image').textContent = counts.type_image || 0;
+        document.getElementById('count-type-audio').textContent = counts.type_audio || 0;
+        document.getElementById('count-type-other').textContent = counts.type_other || 0;
+
+    } catch (error) {
+        console.error('Failed to load download options:', error);
+        document.getElementById('options-loading').textContent = 'Failed to load options';
+    }
+}
+
+function setCheckbox(name, checked) {
+    const checkbox = document.querySelector(`input[name="${name}"]`);
+    if (checkbox) checkbox.checked = checked;
+}
+
+function getCheckbox(name) {
+    const checkbox = document.querySelector(`input[name="${name}"]`);
+    return checkbox ? checkbox.checked : true;
+}
+
+async function saveDownloadOptions() {
+    const options = {
+        // Resolution
+        res_360p: getCheckbox('res_360p'),
+        res_480p: getCheckbox('res_480p'),
+        res_720p: getCheckbox('res_720p'),
+        res_1080p: getCheckbox('res_1080p'),
+        res_1440p: getCheckbox('res_1440p'),
+        res_4k: getCheckbox('res_4k'),
+        // Duration
+        dur_30s: getCheckbox('dur_30s'),
+        dur_1m: getCheckbox('dur_1m'),
+        dur_5m: getCheckbox('dur_5m'),
+        dur_15m: getCheckbox('dur_15m'),
+        dur_30m: getCheckbox('dur_30m'),
+        dur_1h: getCheckbox('dur_1h'),
+        dur_long: getCheckbox('dur_long'),
+        // Media type
+        type_video: getCheckbox('type_video'),
+        type_image: getCheckbox('type_image'),
+        type_audio: getCheckbox('type_audio'),
+        type_other: getCheckbox('type_other'),
+    };
+
+    const statusEl = document.getElementById('options-status');
+    statusEl.textContent = 'Saving...';
+    statusEl.className = 'options-status';
+
+    try {
+        const response = await fetch('/download_options/' + channelId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(options)
+        });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            statusEl.textContent = 'Saved!';
+            statusEl.className = 'options-status success';
+            setTimeout(() => { statusEl.textContent = ''; }, 2000);
+            // Update pending count after saving options
+            updatePendingCount();
+        } else {
+            statusEl.textContent = 'Failed to save';
+            statusEl.className = 'options-status error';
+        }
+    } catch (error) {
+        statusEl.textContent = 'Error saving options';
+        statusEl.className = 'options-status error';
+    }
+}
+
+async function updatePendingCount() {
+    try {
+        const response = await fetch('/pending_count/' + channelId);
+        const data = await response.json();
+
+        const pendingInfo = document.getElementById('pending-info');
+        if (data.would_download !== undefined) {
+            if (data.filtered_out > 0) {
+                pendingInfo.textContent = `${data.would_download} pending (${data.filtered_out} filtered)`;
+            } else {
+                pendingInfo.textContent = `${data.would_download} pending`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to update pending count:', error);
+    }
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     checkActiveTasks();
+    updatePendingCount();
 });
 </script>
 {% endblock %}

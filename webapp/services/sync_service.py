@@ -218,8 +218,13 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
     except CancelledError:
         logger.info("Sync cancelled by user")
         return {"status": "cancelled"}
+    except asyncio.CancelledError:
+        logger.info("Sync interrupted (asyncio cancelled)")
+        if task:
+            await task.set_cancelled("Sync interrupted")
+        return {"status": "cancelled"}
     except Exception as e:
-        logger.error(f"Sync failed: {e}")
+        logger.exception(f"Sync failed: {e}")
         if task:
             await task.fail(str(e))
         raise

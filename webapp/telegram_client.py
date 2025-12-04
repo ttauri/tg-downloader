@@ -9,8 +9,14 @@ client = TelegramClient("session_name", settings.api_id, settings.api_hash)
 # if isinstance(message.media, (MessageMediaPhoto, MessageMediaDocument)):
 
 
+async def ensure_client_connected():
+    """Ensure the client is connected. Safe to call multiple times."""
+    if not client.is_connected():
+        await client.start(phone=settings.phone)
+
+
 async def fetch_channels_list():
-    await client.start(phone=settings.phone)
+    await ensure_client_connected()
     channels = await client.get_dialogs()
     return channels
 
@@ -24,8 +30,7 @@ async def download_media_from_message(message, path, progress_callback=None):
 
 
 async def fetch_channel_media(channel_id):
-    async with client:
-        channel = await client.get_entity(int(channel_id))
-        async for message in client.iter_messages(channel):
-            # async for message in client.iter_messages(channel, filter=lambda m: m.media):
-            yield message
+    await ensure_client_connected()
+    channel = await client.get_entity(int(channel_id))
+    async for message in client.iter_messages(channel):
+        yield message

@@ -48,3 +48,6 @@ class Channel(Base):
     channel_name = Column(String, unique=False, index=True)
     subscribed = Column(Boolean, default=False)
     last_synced = Column(DateTime, nullable=True)
+
+    # Download options (JSON stored as text)
+    download_options = Column(Text, nullable=True)  # JSON: resolution/duration filters

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 import starlette.status as status
@@ -8,6 +9,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+
+from .logging_conf import logger
 
 from .crud import (
     create_or_update_channel,
@@ -47,6 +50,13 @@ app = FastAPI()
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+# Global exception handler to log all unhandled exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled exception for {request.method} {request.url}: {exc}")
+    raise exc
 
 
 @app.on_event("startup")
@@ -134,17 +144,32 @@ async def update_channel_form(request: Request, db: Session = Depends(get_db)):
 
 async def run_fetch_task(channel_id: str, task):
     """Background task wrapper for fetching messages."""
-    await fetch_messages_form_channel(channel_id=channel_id, task=task)
+    try:
+        await fetch_messages_form_channel(channel_id=channel_id, task=task)
+    except asyncio.CancelledError:
+        logger.info(f"Fetch task cancelled for channel {channel_id}")
+    except Exception as e:
+        logger.exception(f"Fetch task failed for channel {channel_id}: {e}")
 
 
 async def run_download_task(channel_id: str, task):
     """Background task wrapper for downloading media."""
-    await download_media_from_channel(channel_id=channel_id, task=task)
+    try:
+        await download_media_from_channel(channel_id=channel_id, task=task)
+    except asyncio.CancelledError:
+        logger.info(f"Download task cancelled for channel {channel_id}")
+    except Exception as e:
+        logger.exception(f"Download task failed for channel {channel_id}: {e}")
 
 
 async def run_sync_task(channel_id: str, channel_name: str, task):
     """Background task wrapper for syncing storage."""
-    await sync_channel_storage(channel_id=channel_id, channel_name=channel_name, task=task)
+    try:
+        await sync_channel_storage(channel_id=channel_id, channel_name=channel_name, task=task)
+    except asyncio.CancelledError:
+        logger.info(f"Sync task cancelled for channel {channel_id}")
+    except Exception as e:
+        logger.exception(f"Sync task failed for channel {channel_id}: {e}")
 
 
 @app.post("/fetch_messages/")
@@ -381,13 +406,15 @@ def format_duration_long(seconds):
 
 
 @app.get("/content_stats/{channel_id}")
-async def content_stats(channel_id: str, db: Session = Depends(get_db)):
+async def content_stats(channel_id: str, scope: str = "downloaded", db: Session = Depends(get_db)):
     """Get detailed content statistics for a channel."""
     channel = get_channel_by_id(db, channel_id)
     if not channel:
         return {"error": "Channel not found"}
 
-    stats = get_channel_content_stats(db, channel_id)
+    # scope: "downloaded" = only downloaded files, "all" = all files in channel
+    downloaded_only = (scope == "downloaded")
+    stats = get_channel_content_stats(db, channel_id, downloaded_only=downloaded_only)
 
     # Format durations for display
     stats['total_duration_formatted'] = format_duration_long(stats['total_duration_seconds'])
@@ -484,6 +511,129 @@ def write_env_file(env_settings: dict):
     """Write settings to env file."""
     lines = [f"{key}={value}" for key, value in env_settings.items()]
     ENV_FILE_PATH.write_text('\n'.join(lines) + '\n')
+
+
+@app.get("/download_options/{channel_id}")
+async def get_download_options(channel_id: str, db: Session = Depends(get_db)):
+    """Get download options and media counts for a channel."""
+    from sqlalchemy import and_
+    from .models import Channel
+
+    channel = db.query(Channel).filter(Channel.channel_id == channel_id).first()
+    if not channel:
+        return {"error": "Channel not found"}
+
+    # Parse saved options (default all enabled)
+    options = {}
+    if channel.download_options:
+        try:
+            options = json.loads(channel.download_options)
+        except json.JSONDecodeError:
+            pass
+
+    # Get counts for each category (pending files only)
+    pending_filter = and_(
+        Media.tg_channel_id == channel_id,
+        Media.is_downloaded == False,
+        Media.duplicate_of_id == None
+    )
+
+    # Resolution counts (for videos with height info)
+    all_pending = db.query(Media).filter(pending_filter).all()
+
+    counts = {
+        'res_360p': 0, 'res_480p': 0, 'res_720p': 0,
+        'res_1080p': 0, 'res_1440p': 0, 'res_4k': 0,
+        'dur_30s': 0, 'dur_1m': 0, 'dur_5m': 0,
+        'dur_15m': 0, 'dur_30m': 0, 'dur_1h': 0, 'dur_long': 0,
+        'type_video': 0, 'type_image': 0, 'type_audio': 0, 'type_other': 0
+    }
+
+    for m in all_pending:
+        # Media type counts
+        if m.media_type:
+            if m.media_type.startswith('video'):
+                counts['type_video'] += 1
+            elif m.media_type.startswith('image'):
+                counts['type_image'] += 1
+            elif m.media_type.startswith('audio'):
+                counts['type_audio'] += 1
+            else:
+                counts['type_other'] += 1
+        else:
+            counts['type_other'] += 1
+
+        # Resolution counts (videos only)
+        if m.height:
+            if m.height <= 360:
+                counts['res_360p'] += 1
+            elif m.height <= 480:
+                counts['res_480p'] += 1
+            elif m.height <= 720:
+                counts['res_720p'] += 1
+            elif m.height <= 1080:
+                counts['res_1080p'] += 1
+            elif m.height <= 1440:
+                counts['res_1440p'] += 1
+            else:
+                counts['res_4k'] += 1
+
+        # Duration counts (videos only)
+        if m.duration:
+            d = m.duration
+            if d < 30:
+                counts['dur_30s'] += 1
+            elif d < 60:
+                counts['dur_1m'] += 1
+            elif d < 300:
+                counts['dur_5m'] += 1
+            elif d < 900:
+                counts['dur_15m'] += 1
+            elif d < 1800:
+                counts['dur_30m'] += 1
+            elif d < 3600:
+                counts['dur_1h'] += 1
+            else:
+                counts['dur_long'] += 1
+
+    return {"options": options, "counts": counts}
+
+
+@app.post("/download_options/{channel_id}")
+async def save_download_options(channel_id: str, request: Request, db: Session = Depends(get_db)):
+    """Save download options for a channel."""
+    from .models import Channel
+
+    channel = db.query(Channel).filter(Channel.channel_id == channel_id).first()
+    if not channel:
+        return {"error": "Channel not found"}
+
+    options = await request.json()
+    channel.download_options = json.dumps(options)
+    db.commit()
+
+    return {"status": "success"}
+
+
+@app.get("/pending_count/{channel_id}")
+async def get_pending_count(channel_id: str, db: Session = Depends(get_db)):
+    """Get filtered pending download count based on channel's download options."""
+    from .models import Channel
+    from .crud import count_filtered_pending_media
+
+    channel = db.query(Channel).filter(Channel.channel_id == channel_id).first()
+    if not channel:
+        return {"error": "Channel not found"}
+
+    options = {}
+    if channel.download_options:
+        try:
+            options = json.loads(channel.download_options)
+        except json.JSONDecodeError:
+            pass
+
+    counts = count_filtered_pending_media(db, channel_id, options)
+    return counts
 
 
 @app.get("/settings/", response_class=HTMLResponse)

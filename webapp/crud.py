@@ -55,6 +55,39 @@ def get_all_not_downloaded_media(db: Session, channel_id: int, order="none"):
     return query
 
 
+def count_filtered_pending_media(db: Session, channel_id: str, options: dict) -> dict:
+    """
+    Count pending media that would be downloaded based on filter options.
+    Returns dict with total pending, filtered count, and would-download count.
+    """
+    from webapp.services.periodic_task import should_download_media
+
+    pending = db.query(Media).filter(
+        and_(
+            Media.tg_channel_id == channel_id,
+            Media.is_downloaded == False,
+            Media.duplicate_of_id == None
+        )
+    ).all()
+
+    total_pending = len(pending)
+    would_download = 0
+    filtered_out = 0
+
+    for m in pending:
+        should_dl, _ = should_download_media(m, options)
+        if should_dl:
+            would_download += 1
+        else:
+            filtered_out += 1
+
+    return {
+        "total_pending": total_pending,
+        "would_download": would_download,
+        "filtered_out": filtered_out
+    }
+
+
 def find_downloaded_by_file_id(db: Session, channel_id: str, tg_file_id: int):
     """Find a downloaded media record with the same tg_file_id."""
     if not tg_file_id:
@@ -121,37 +154,42 @@ def get_channel_media_stats(db: Session, channel_id: str):
     return stats
 
 
-def get_channel_content_stats(db: Session, channel_id: str):
+def get_channel_content_stats(db: Session, channel_id: str, downloaded_only: bool = True):
     """
     Get detailed content statistics for a channel.
     Returns duration distribution, resolution distribution, activity timeline, and top content.
+
+    Args:
+        downloaded_only: If True, only include downloaded files. If False, include all files.
     """
     from datetime import datetime, timedelta
     from collections import defaultdict
 
-    # Get all downloaded videos with duration
-    videos_with_duration = db.query(Media).filter(
-        and_(
-            Media.tg_channel_id == channel_id,
-            Media.media_type.like('video%'),
-            Media.is_downloaded == True,
-            Media.duration != None,
-            Media.duration > 0
-        )
-    ).all()
+    # Base filter for videos with duration
+    video_filters = [
+        Media.tg_channel_id == channel_id,
+        Media.media_type.like('video%'),
+        Media.duration != None,
+        Media.duration > 0
+    ]
+    if downloaded_only:
+        video_filters.append(Media.is_downloaded == True)
 
-    # Get all downloaded videos/images with resolution
-    media_with_resolution = db.query(Media).filter(
-        and_(
-            Media.tg_channel_id == channel_id,
-            Media.is_downloaded == True,
-            Media.width != None,
-            Media.height != None
-        )
-    ).all()
+    videos_with_duration = db.query(Media).filter(and_(*video_filters)).all()
 
-    # Get all media for activity timeline
-    all_media = db.query(Media).filter(
+    # Base filter for media with resolution
+    resolution_filters = [
+        Media.tg_channel_id == channel_id,
+        Media.width != None,
+        Media.height != None
+    ]
+    if downloaded_only:
+        resolution_filters.append(Media.is_downloaded == True)
+
+    media_with_resolution = db.query(Media).filter(and_(*resolution_filters)).all()
+
+    # Get all media for activity timeline (always show full channel activity)
+    all_media_for_timeline = db.query(Media).filter(
         Media.tg_channel_id == channel_id
     ).all()
 
@@ -219,36 +257,42 @@ def get_channel_content_stats(db: Session, channel_id: str):
         else:
             resolution_buckets['4K+'] += 1
 
-    # ===== Activity Timeline (last 12 months) =====
+    # ===== Activity Timeline (all time) =====
     activity_timeline = defaultdict(int)
-    now = datetime.now()
 
-    for m in all_media:
+    for m in all_media_for_timeline:
         if m.message_date:
             month_key = m.message_date.strftime('%Y-%m')
             activity_timeline[month_key] += 1
 
-    # Sort and get last 12 months
-    sorted_months = sorted(activity_timeline.keys(), reverse=True)[:12]
-    sorted_months.reverse()
+    # Sort all months chronologically
+    sorted_months = sorted(activity_timeline.keys())
     activity_data = {month: activity_timeline[month] for month in sorted_months}
 
     # ===== Top Content =====
     # Longest videos
+    longest_filters = [
+        Media.tg_channel_id == channel_id,
+        Media.media_type.like('video%'),
+        Media.duration != None
+    ]
+    if downloaded_only:
+        longest_filters.append(Media.is_downloaded == True)
+
     longest_videos = db.query(Media).filter(
-        and_(
-            Media.tg_channel_id == channel_id,
-            Media.media_type.like('video%'),
-            Media.duration != None
-        )
+        and_(*longest_filters)
     ).order_by(desc(Media.duration)).limit(5).all()
 
     # Largest files
+    largest_filters = [
+        Media.tg_channel_id == channel_id,
+        Media.size != None
+    ]
+    if downloaded_only:
+        largest_filters.append(Media.is_downloaded == True)
+
     largest_files = db.query(Media).filter(
-        and_(
-            Media.tg_channel_id == channel_id,
-            Media.size != None
-        )
+        and_(*largest_filters)
     ).order_by(desc(Media.size)).limit(5).all()
 
     # ===== Summary Stats =====
