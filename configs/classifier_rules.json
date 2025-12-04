@@ -1,0 +1,44 @@
+[
+  {
+    "dir_name": "explicit_mf",
+    "description": "Mixed male and female explicit content",
+    "thresholds": {
+      "MALE_GENITALIA_EXPOSED": 3,
+      "FEMALE_GENITALIA_EXPOSED": 3
+    }
+  },
+  {
+    "dir_name": "solo_f_explicit",
+    "description": "Solo female explicit (genitalia/anus)",
+    "thresholds_any": {
+      "FEMALE_GENITALIA_EXPOSED": 10,
+      "ANUS_EXPOSED": 10
+    },
+    "exclude": {
+      "MALE_GENITALIA_EXPOSED": 2
+    }
+  },
+  {
+    "dir_name": "solo_m_explicit",
+    "description": "Solo male explicit content",
+    "thresholds": {
+      "MALE_GENITALIA_EXPOSED": 5
+    },
+    "exclude": {
+      "FEMALE_GENITALIA_EXPOSED": 2
+    }
+  },
+  {
+    "dir_name": "softcore_f",
+    "description": "Softcore female (breast/buttocks only)",
+    "thresholds_any": {
+      "FEMALE_BREAST_EXPOSED": 15,
+      "BUTTOCKS_EXPOSED": 15
+    },
+    "exclude": {
+      "FEMALE_GENITALIA_EXPOSED": 5,
+      "MALE_GENITALIA_EXPOSED": 2,
+      "ANUS_EXPOSED": 5
+    }
+  }
+]
