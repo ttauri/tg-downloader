@@ -96,6 +96,7 @@ import tempfile
 from typing import Callable, Dict, List, Optional
 
 import cv2
+import yaml
 from nudenet import NudeDetector
 
 
@@ -174,33 +175,52 @@ DEFAULT_CONFIG = {
 }
 
 
+def _is_yaml(path: str) -> bool:
+    """Check if file is YAML based on extension."""
+    return path.endswith(('.yaml', '.yml'))
+
+
 def load_config(path: Optional[str] = None) -> dict:
-    """Load config from a JSON file or return defaults."""
+    """Load config from a YAML or JSON file, or return defaults."""
     config = DEFAULT_CONFIG.copy()
     if path and os.path.exists(path):
         with open(path, "r") as f:
-            config.update(json.load(f))
+            if _is_yaml(path):
+                config.update(yaml.safe_load(f))
+            else:
+                config.update(json.load(f))
     return config
 
 
 def save_config(config: dict, path: str):
-    """Save config to a JSON file."""
+    """Save config to a YAML or JSON file."""
     with open(path, "w") as f:
-        json.dump(config, f, indent=2)
+        if _is_yaml(path):
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        else:
+            json.dump(config, f, indent=2)
 
 
 def load_rules(path: Optional[str] = None) -> List[dict]:
-    """Load classification rules from a JSON file or return defaults."""
+    """Load classification rules from a YAML or JSON file, or return defaults."""
     if path and os.path.exists(path):
         with open(path, "r") as f:
-            return json.load(f)
+            if _is_yaml(path):
+                data = yaml.safe_load(f)
+                # YAML format has rules under 'rules' key
+                return data.get('rules', data) if isinstance(data, dict) else data
+            else:
+                return json.load(f)
     return [r.copy() for r in DEFAULT_RULES]
 
 
 def save_rules(rules: List[dict], path: str):
-    """Save classification rules to a JSON file."""
+    """Save classification rules to a YAML or JSON file."""
     with open(path, "w") as f:
-        json.dump(rules, f, indent=2)
+        if _is_yaml(path):
+            yaml.dump({'rules': rules}, f, default_flow_style=False, sort_keys=False)
+        else:
+            json.dump(rules, f, indent=2)
 
 
 def classify_video(

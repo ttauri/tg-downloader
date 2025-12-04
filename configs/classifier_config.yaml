@@ -1,0 +1,23 @@
+# =============================================================================
+# VIDEO CLASSIFIER CONFIGURATION
+# =============================================================================
+
+# Detection confidence threshold (0.0 - 1.0)
+# Higher = fewer false positives, but may miss some detections
+# Lower = more detections, but more false positives
+# Recommended: 0.5
+threshold: 0.5
+
+# Number of frames to analyze per video
+# The classifier samples frames evenly throughout the video
+# For short videos (<10s), fewer frames are used automatically
+# 100 frames works well for most content
+num_frames: 100
+
+# Video file extensions to process
+video_extensions:
+  - .mp4
+  - .avi
+  - .mov
+  - .mkv
+  - .webm
