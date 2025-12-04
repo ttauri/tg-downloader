@@ -56,8 +56,8 @@ class Task:
         except asyncio.QueueFull:
             pass  # Queue is full, event will be sent when space is available
 
-    async def update(self, current: int = None, total: int = None, message: str = None, status: TaskStatus = None):
-        if self._cancelled:
+    async def update(self, current: int = None, total: int = None, message: str = None, status: TaskStatus = None, check_cancelled: bool = True):
+        if check_cancelled and self._cancelled:
             raise CancelledError("Task was cancelled")
         if current is not None:
             self.progress.current = current

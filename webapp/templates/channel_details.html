@@ -15,10 +15,7 @@
 <div id="progress-panel" class="progress-panel hidden">
     <div class="progress-header">
         <span id="progress-title">Operation in progress...</span>
-        <div class="progress-controls">
-            <span id="progress-status" class="status-badge">running</span>
-            <button type="button" id="stop-btn" class="stop-btn" onclick="stopTask()">Stop</button>
-        </div>
+        <span id="progress-status" class="status-badge">running</span>
     </div>
     <div class="progress-bar-container">
         <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
@@ -259,6 +256,7 @@ const channelId = "{{ channel.channel_id }}";
 let eventSource = null;
 let currentTaskId = null;
 let currentBtnId = null;
+let currentOperation = null;
 let statsLoaded = false;
 let libraryLoaded = false;
 
@@ -266,6 +264,103 @@ let libraryLoaded = false;
 let durationChart = null;
 let resolutionChart = null;
 let activityChart = null;
+
+// Operation to button/title mapping
+const operationConfig = {
+    fetch: { btnId: 'fetch-btn', title: 'Fetching messages...', label: 'Fetch' },
+    download: { btnId: 'download-btn', title: 'Downloading media...', label: 'Download' },
+    sync: { btnId: 'sync-btn', title: 'Syncing storage...', label: 'Sync' }
+};
+
+// Check for active tasks on page load
+async function checkActiveTasks() {
+    try {
+        const response = await fetch('/active_tasks/' + channelId);
+        const tasks = await response.json();
+
+        // Check each operation type
+        for (const [operation, taskInfo] of Object.entries(tasks)) {
+            if (taskInfo && taskInfo.status === 'running') {
+                const config = operationConfig[operation];
+                if (config) {
+                    // Set up UI for active task
+                    currentOperation = operation;
+                    setButtonLoading(config.btnId, true);
+                    setButtonStopMode(config.btnId, operation);
+
+                    // Subscribe to progress stream
+                    subscribeToProgress(taskInfo.task_id, config.btnId, config.title);
+
+                    // Update progress with current state
+                    updateProgress({
+                        current: taskInfo.current,
+                        total: taskInfo.total,
+                        message: taskInfo.message,
+                        status: taskInfo.status
+                    });
+
+                    // Only handle one active task at a time
+                    break;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to check active tasks:', error);
+    }
+}
+
+function setButtonStopMode(btnId, operation) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    const config = operationConfig[operation];
+    const text = btn.querySelector('.btn-text');
+    const spinner = btn.querySelector('.btn-spinner');
+
+    // Show text, hide spinner, change to Stop mode
+    if (text) {
+        text.classList.remove('hidden');
+        text.textContent = 'Stop';
+    }
+    if (spinner) spinner.classList.add('hidden');
+
+    btn.disabled = false;
+    btn.classList.add('stop-mode');
+    btn.onclick = () => stopCurrentTask(operation);
+}
+
+function resetButtonNormalMode(btnId, operation) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    const config = operationConfig[operation];
+    const text = btn.querySelector('.btn-text');
+
+    if (text) text.textContent = config.label;
+    btn.classList.remove('stop-mode');
+    btn.disabled = false;
+
+    // Restore original onclick
+    if (operation === 'fetch') btn.onclick = startFetch;
+    else if (operation === 'download') btn.onclick = startDownload;
+    else if (operation === 'sync') btn.onclick = startSync;
+}
+
+async function stopCurrentTask(operation) {
+    if (!currentTaskId) return;
+
+    const config = operationConfig[operation];
+    const btn = document.getElementById(config.btnId);
+    if (btn) btn.disabled = true;
+
+    document.getElementById('progress-message').textContent = 'Stopping...';
+
+    try {
+        await fetch('/stop_task/' + currentTaskId, { method: 'POST' });
+    } catch (error) {
+        console.error('Failed to stop task:', error);
+    }
+}
 
 // Tab switching
 function switchTab(tabName) {
@@ -295,7 +390,6 @@ function showProgress(title) {
     document.getElementById('progress-status').className = 'status-badge running';
     document.getElementById('progress-bar').style.width = '0%';
     document.getElementById('progress-message').textContent = 'Starting...';
-    document.getElementById('stop-btn').disabled = false;
     panel.classList.remove('hidden');
 }
 
@@ -332,9 +426,10 @@ function setButtonLoading(btnId, loading) {
     }
 }
 
-function subscribeToProgress(taskId, btnId, title) {
+function subscribeToProgress(taskId, btnId, title, operation = null) {
     currentTaskId = taskId;
     currentBtnId = btnId;
+    if (operation) currentOperation = operation;
     showProgress(title);
 
     eventSource = new EventSource('/task_progress/' + taskId);
@@ -346,8 +441,11 @@ function subscribeToProgress(taskId, btnId, title) {
         if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
             eventSource.close();
             setButtonLoading(btnId, false);
-            document.getElementById('stop-btn').disabled = true;
+            if (currentOperation) {
+                resetButtonNormalMode(btnId, currentOperation);
+            }
             hideProgressDelayed();
+            currentOperation = null;
             if (data.status === 'completed' || data.status === 'cancelled') {
                 setTimeout(() => location.reload(), 2000);
             }
@@ -357,24 +455,14 @@ function subscribeToProgress(taskId, btnId, title) {
     eventSource.onerror = function() {
         eventSource.close();
         setButtonLoading(btnId, false);
-        document.getElementById('stop-btn').disabled = true;
+        if (currentOperation) {
+            resetButtonNormalMode(btnId, currentOperation);
+        }
         document.getElementById('progress-status').textContent = 'error';
         document.getElementById('progress-status').className = 'status-badge failed';
         hideProgressDelayed();
+        currentOperation = null;
     };
-}
-
-async function stopTask() {
-    if (!currentTaskId) return;
-
-    document.getElementById('stop-btn').disabled = true;
-    document.getElementById('progress-message').textContent = 'Stopping...';
-
-    try {
-        await fetch('/stop_task/' + currentTaskId, { method: 'POST' });
-    } catch (error) {
-        console.error('Failed to stop task:', error);
-    }
 }
 
 async function startFetch() {
@@ -387,7 +475,9 @@ async function startFetch() {
         const data = await response.json();
 
         if (data.task_id) {
-            subscribeToProgress(data.task_id, 'fetch-btn', 'Fetching messages...');
+            currentOperation = 'fetch';
+            setButtonStopMode('fetch-btn', 'fetch');
+            subscribeToProgress(data.task_id, 'fetch-btn', 'Fetching messages...', 'fetch');
         }
     } catch (error) {
         setButtonLoading('fetch-btn', false);
@@ -405,7 +495,9 @@ async function startDownload() {
         const data = await response.json();
 
         if (data.task_id) {
-            subscribeToProgress(data.task_id, 'download-btn', 'Downloading media...');
+            currentOperation = 'download';
+            setButtonStopMode('download-btn', 'download');
+            subscribeToProgress(data.task_id, 'download-btn', 'Downloading media...', 'download');
         }
     } catch (error) {
         setButtonLoading('download-btn', false);
@@ -640,7 +732,9 @@ async function startSync() {
         const data = await response.json();
 
         if (data.task_id) {
-            subscribeToProgress(data.task_id, 'sync-btn', 'Syncing storage...');
+            currentOperation = 'sync';
+            setButtonStopMode('sync-btn', 'sync');
+            subscribeToProgress(data.task_id, 'sync-btn', 'Syncing storage...', 'sync');
         } else if (data.error) {
             setButtonLoading('sync-btn', false);
             alert('Sync failed: ' + data.error);
@@ -759,5 +853,10 @@ function nextPage() {
         loadMediaList(false);
     }
 }
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkActiveTasks();
+});
 </script>
 {% endblock %}

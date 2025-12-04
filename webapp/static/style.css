@@ -121,6 +121,18 @@ h2 {
     cursor: not-allowed;
 }
 
+.action-btn.stop-mode {
+    background-color: var(--danger-color, #dc3545);
+    border-color: var(--danger-color, #dc3545);
+    color: white;
+}
+
+.action-btn.stop-mode:hover:not(:disabled) {
+    background-color: #c82333;
+    border-color: #bd2130;
+    color: white;
+}
+
 .btn-spinner {
     display: inline-block;
     width: 14px;

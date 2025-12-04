@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime
 from typing import Optional
@@ -18,6 +19,11 @@ from webapp.services.storage_service import (
     UNSORTED_FOLDER,
 )
 from webapp.logging_conf import logger
+
+
+def _db_commit(db):
+    """Synchronous DB commit - to be run in thread pool."""
+    db.commit()
 
 
 def get_downloaded_media_by_channel(db: Session, channel_id: str):
@@ -65,7 +71,7 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
             logger.info(f"Channel found: {channel is not None}")
             if channel:
                 channel.last_synced = datetime.now()
-                db.commit()
+                await asyncio.to_thread(_db_commit, db)
                 logger.info(f"Updated last_synced to {channel.last_synced}")
             if task:
                 await task.complete("No folder exists yet")
@@ -119,9 +125,9 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
                 media.disk_verified = True
                 media.disk_size = file_info['size']
 
-                # Compute hash if not already done
+                # Compute hash if not already done (run in thread to not block)
                 if not media.file_hash:
-                    file_hash = compute_file_hash(file_info['path'])
+                    file_hash = await asyncio.to_thread(compute_file_hash, file_info['path'])
                     if file_hash:
                         media.file_hash = file_hash
                         hashed += 1
@@ -143,7 +149,7 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
                 await task.update(current=i, total=total,
                                   message=f"Verified {i}/{total} ({verified} ok, {missing} missing)")
 
-        db.commit()
+        await asyncio.to_thread(_db_commit, db)
 
         # Handle orphan files
         orphans_moved = 0
@@ -154,7 +160,7 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
 
             for filename in orphan_files:
                 file_path = disk_files[filename]['path']
-                new_path = move_to_orphaned(file_path, channel_name)
+                new_path = await asyncio.to_thread(move_to_orphaned, file_path, channel_name)
                 if new_path:
                     orphans_moved += 1
                     logger.info(f"Moved orphan: {filename} -> {new_path}")
@@ -178,7 +184,7 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
                     if duplicate.filename:
                         dup_path = os.path.join(folder_path, duplicate.filename)
                         if os.path.exists(dup_path):
-                            os.remove(dup_path)
+                            await asyncio.to_thread(os.remove, dup_path)
                             logger.info(f"Deleted duplicate file: {duplicate.filename} (keeping {best.filename})")
                         duplicate.is_downloaded = False
                         duplicate.filename = ""
@@ -191,7 +197,7 @@ async def sync_channel_storage(channel_id: str, channel_name: str, task: Optiona
             channel.last_synced = datetime.now()
             logger.info(f"Set last_synced to {channel.last_synced}")
 
-        db.commit()
+        await asyncio.to_thread(_db_commit, db)
         logger.info("Committed last_synced update")
 
         result = {

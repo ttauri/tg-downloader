@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import Optional
 
@@ -10,6 +11,17 @@ from webapp.crud import create_media, get_channel_by_id, get_all_not_downloaded_
 from webapp.database import SessionLocal
 from webapp.telegram_client import client, download_media_from_message
 from webapp.logging_conf import logger
+
+
+def _db_commit_and_refresh(db, obj):
+    """Synchronous DB commit and refresh - to be run in thread pool."""
+    db.commit()
+    db.refresh(obj)
+
+
+def _db_commit(db):
+    """Synchronous DB commit - to be run in thread pool."""
+    db.commit()
 
 
 def format_speed(bytes_per_second):
@@ -53,9 +65,14 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                 await task.update(current=0, total=total, status=TaskStatus.RUNNING, message="Starting download...")
 
             skipped = 0
+            stop_after_current = False
             for i, m in enumerate(media, start=1):
-                if task and task.is_cancelled:
-                    await task.set_cancelled(f"Stopped after {i-1}/{total} files")
+                # Check if previous file set the stop flag (cancellation requested during download)
+                if stop_after_current:
+                    downloaded = i - 1 - skipped
+                    logger.info(f"Stopping before file {i}/{total}")
+                    if task:
+                        await task.set_cancelled(f"Stopped after {downloaded} files downloaded")
                     return
 
                 # Check if this file was already downloaded (same tg_file_id)
@@ -65,7 +82,7 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                         # Mark as duplicate, skip download
                         m.duplicate_of_id = existing.id
                         m.is_downloaded = False
-                        db.commit()
+                        await asyncio.to_thread(_db_commit, db)
                         skipped += 1
                         logger.info(f"Skipped duplicate {i}/{total}: same file as {existing.filename}")
                         if task:
@@ -83,12 +100,14 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                 last_update_time = [download_start_time]  # Use list to allow mutation in callback
 
                 async def progress_callback(current_bytes, total_bytes):
-                    # Check for cancellation during download
+                    nonlocal stop_after_current
+
+                    # Always check for cancellation (don't throttle this check)
                     if task and task.is_cancelled:
-                        raise CancelledError("Download cancelled by user")
+                        stop_after_current = True
 
                     now = time.time()
-                    # Throttle updates to max 2 per second
+                    # Throttle UI updates to max 2 per second
                     if now - last_update_time[0] < 0.5:
                         return
                     last_update_time[0] = now
@@ -101,10 +120,15 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                     total_formatted = format_size(total_bytes)
                     pct = round(current_bytes / total_bytes * 100) if total_bytes > 0 else 0
 
-                    msg = f"Downloading {i}/{total}: {current_formatted}/{total_formatted} ({pct}%) @ {speed_str}"
+                    # Show appropriate message based on cancellation state
+                    if stop_after_current:
+                        msg = f"Finishing {i}/{total}: {current_formatted}/{total_formatted} ({pct}%) - stopping after this file..."
+                    else:
+                        msg = f"Downloading {i}/{total}: {current_formatted}/{total_formatted} ({pct}%) @ {speed_str}"
 
                     if task:
-                        await task.update(current=i, total=total, message=msg)
+                        # Don't raise CancelledError - we want to finish the current file
+                        await task.update(current=i, total=total, message=msg, check_cancelled=False)
 
                 if task:
                     await task.update(current=i, total=total, message=f"Starting {i}/{total}: {size_formatted}")
@@ -117,8 +141,15 @@ async def download_media_from_channel(channel_id: int, task: Optional[Task] = No
                 logger.info(f"{media_path} finished. Filename: {filename}")
                 m.is_downloaded = True
                 m.filename = filename
-                db.commit()
-                db.refresh(m)
+                await asyncio.to_thread(_db_commit_and_refresh, db, m)
+
+                # Check if cancellation was requested during this download
+                if stop_after_current:
+                    downloaded = i - skipped
+                    logger.info(f"Stopping after completing file {i}/{total}")
+                    if task:
+                        await task.set_cancelled(f"Stopped after {downloaded} files downloaded")
+                    return
 
             if task:
                 downloaded = total - skipped

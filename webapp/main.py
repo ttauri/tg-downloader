@@ -203,6 +203,23 @@ async def sync_channel(
     return {"task_id": task.task_id, "status": "started"}
 
 
+@app.get("/active_tasks/{channel_id}")
+async def active_tasks(channel_id: str):
+    """Get active tasks for a channel."""
+    tasks = {}
+    for operation in ["fetch", "download", "sync"]:
+        task = task_manager.get_active_task(channel_id, operation)
+        if task:
+            tasks[operation] = {
+                "task_id": task.task_id,
+                "status": task.progress.status.value,
+                "current": task.progress.current,
+                "total": task.progress.total,
+                "message": task.progress.message,
+            }
+    return tasks
+
+
 @app.get("/task_progress/{task_id}")
 async def task_progress(task_id: str):
     """SSE endpoint for streaming task progress."""
