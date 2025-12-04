@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, Float, UniqueConstraint, ForeignKey
+from sqlalchemy.orm import relationship
 
 from .database import Base
 
@@ -12,9 +13,19 @@ class Media(Base):
     tg_message_id = Column(Integer, index=True)
     tg_channel_id = Column(Integer, index=True)
     media_type = Column(String, index=True)
-    size = Column(Float)
+    size = Column(Float)  # Telegram-reported size
     is_downloaded = Column(Boolean, default=False)
     filename = Column(String, index=True)
+
+    # Sync & deduplication fields
+    file_hash = Column(String, index=True)  # SHA256 of first+last 1MB
+    disk_size = Column(Integer)  # Actual file size on disk
+    disk_verified = Column(Boolean, default=False)  # Last sync confirmed file exists
+    duplicate_of_id = Column(Integer, ForeignKey('media.id'), nullable=True)
+    quality_score = Column(Integer, default=0)  # For choosing best quality (higher = better)
+
+    # Self-referential relationship for duplicates
+    duplicate_of = relationship('Media', remote_side=[id], backref='duplicates')
 
 
 class Channel(Base):

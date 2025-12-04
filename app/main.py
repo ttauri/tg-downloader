@@ -29,6 +29,12 @@ from .services.periodic_task import (
     fetch_messages_form_channel,
     download_media_from_channel,
 )
+from .services.sync_service import sync_channel_storage, startup_sync_check
+from .services.storage_service import (
+    get_channel_folder_path,
+    get_folder_stats,
+    format_size as format_size_storage,
+)
 
 app = FastAPI()
 
@@ -39,6 +45,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.on_event("startup")
 def on_startup():
     init_db()
+    startup_sync_check()
 
 
 app.include_router(media.router, prefix="/media", tags=["media"])
@@ -129,6 +136,11 @@ async def run_download_task(channel_id: str, task):
     await download_media_from_channel(channel_id=channel_id, task=task)
 
 
+async def run_sync_task(channel_id: str, channel_name: str, task):
+    """Background task wrapper for syncing storage."""
+    await sync_channel_storage(channel_id=channel_id, channel_name=channel_name, task=task)
+
+
 @app.post("/fetch_messages/")
 async def check_messages(
     request: Request,
@@ -160,6 +172,28 @@ async def download_media(
 
     task = task_manager.create_task(channel_id, "download")
     background_tasks.add_task(run_download_task, channel_id, task)
+    return {"task_id": task.task_id, "status": "started"}
+
+
+@app.post("/sync_channel/")
+async def sync_channel(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    channel_id: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Sync database with actual files on disk."""
+    # Check if there's already an active sync task for this channel
+    existing = task_manager.get_active_task(channel_id, "sync")
+    if existing:
+        return {"task_id": existing.task_id, "status": "already_running"}
+
+    channel = get_channel_by_id(db, channel_id)
+    if not channel:
+        return {"error": "Channel not found"}
+
+    task = task_manager.create_task(channel_id, "sync")
+    background_tasks.add_task(run_sync_task, channel_id, channel.channel_name, task)
     return {"task_id": task.task_id, "status": "started"}
 
 
@@ -226,3 +260,51 @@ async def reset_channel(channel_id: str, db: Session = Depends(get_db)):
     """Delete all media records for a channel."""
     deleted = delete_channel_media(db, channel_id)
     return {"status": "success", "deleted": deleted, "channel_id": channel_id}
+
+
+@app.get("/storage_info/{channel_id}")
+async def storage_info(channel_id: str, db: Session = Depends(get_db)):
+    """Get storage information for a channel's media folder."""
+    channel = get_channel_by_id(db, channel_id)
+    if not channel:
+        return {"error": "Channel not found"}
+
+    folder_path = get_channel_folder_path(channel.channel_name)
+    stats = get_folder_stats(folder_path)
+
+    # Get DB count for comparison
+    all_media = get_all_media(db, channel_id)
+    downloaded_media = get_all_downloaded_media(db, channel_id)
+    db_downloaded_count = downloaded_media.count()
+
+    # Format extensions with sizes
+    extensions_formatted = {}
+    for ext, data in stats['extensions'].items():
+        extensions_formatted[ext] = {
+            'count': data['count'],
+            'size': data['size'],
+            'size_formatted': format_size_storage(data['size']),
+        }
+
+    # Format file list with sizes
+    files_formatted = []
+    for f in stats['files']:
+        files_formatted.append({
+            'name': f['name'],
+            'size': f['size'],
+            'size_formatted': format_size_storage(f['size']),
+            'extension': f['extension'],
+        })
+
+    return {
+        "exists": stats['exists'],
+        "path": stats['path'],
+        "file_count": stats['file_count'],
+        "total_size": stats['total_size'],
+        "total_size_formatted": format_size_storage(stats['total_size']),
+        "extensions": extensions_formatted,
+        "files": files_formatted,
+        "db_downloaded_count": db_downloaded_count,
+        "db_total_count": len(all_media),
+        "mismatch": stats['file_count'] != db_downloaded_count if stats['exists'] else False,
+    }

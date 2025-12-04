@@ -313,6 +313,237 @@ h2 {
     }
 }
 
+/* Actions Panel */
+.actions-panel {
+    background-color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.actions-panel h3 {
+    color: var(--highlight-color);
+    margin: 0 0 15px 0;
+    font-size: 14px;
+}
+
+.action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.action-row:last-child {
+    border-bottom: none;
+}
+
+.action-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.action-label {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.action-detail {
+    font-size: 12px;
+    color: #888;
+}
+
+/* Storage Panel */
+.storage-panel {
+    background-color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.storage-panel h3 {
+    color: var(--highlight-color);
+    margin: 0 0 15px 0;
+    font-size: 14px;
+}
+
+.storage-loading {
+    color: #888;
+    font-style: italic;
+}
+
+.storage-empty {
+    color: #888;
+}
+
+.storage-header {
+    margin-bottom: 15px;
+}
+
+.storage-path-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.storage-label {
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.storage-path {
+    background-color: var(--bg-color);
+    padding: 5px 10px;
+    font-size: 12px;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.copy-btn {
+    font-family: 'Courier New', monospace;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.copy-btn:hover {
+    background-color: var(--border-color);
+    color: var(--highlight-color);
+}
+
+.storage-warning {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px;
+    background-color: rgba(74, 60, 28, 0.3);
+    border: 1px solid #ffb74d;
+}
+
+.warning-icon {
+    color: #ffb74d;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.warning-text {
+    color: #ffb74d;
+    font-size: 13px;
+}
+
+.storage-stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.storage-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.storage-stat .stat-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--highlight-color);
+}
+
+.storage-stat .stat-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+}
+
+.extensions-section {
+    margin-bottom: 15px;
+}
+
+.extensions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.ext-tag {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+.files-section {
+    margin-top: 10px;
+}
+
+.collapsible {
+    font-family: 'Courier New', monospace;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.collapsible:hover {
+    background-color: var(--border-color);
+}
+
+.files-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-top: none;
+    background-color: var(--bg-color);
+}
+
+.file-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+}
+
+.file-row:last-child {
+    border-bottom: none;
+}
+
+.file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 70%;
+}
+
+.file-size {
+    color: #888;
+    white-space: nowrap;
+}
+
+.action-btn.small {
+    padding: 3px 10px;
+    font-size: 12px;
+    min-width: auto;
+}
+
 /* Danger Zone */
 .danger-zone {
     margin-top: 30px;
