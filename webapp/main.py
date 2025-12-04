@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 
 import starlette.status as status
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, Query, Request
@@ -38,10 +39,13 @@ from .services.storage_service import (
 )
 from .config import settings, ENV_FILE_PATH
 
+# Get the directory where this file is located
+BASE_DIR = Path(__file__).resolve().parent
+
 app = FastAPI()
 
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
 @app.on_event("startup")

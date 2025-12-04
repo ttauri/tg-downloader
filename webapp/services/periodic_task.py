@@ -1,14 +1,14 @@
 import time
 from typing import Optional
 
-from app import schemas
-from app.config import settings
-from app.services.helper_functions import sanitize_dirname
-from app.services.task_manager import Task, TaskStatus, CancelledError
-from app.crud import create_media, get_channel_by_id, get_all_not_downloaded_media, find_downloaded_by_file_id
-from app.database import SessionLocal
-from app.telegram_client import client, download_media_from_message
-from app.logging_conf import logger
+from webapp import schemas
+from webapp.config import settings
+from webapp.services.helper_functions import sanitize_dirname
+from webapp.services.task_manager import Task, TaskStatus, CancelledError
+from webapp.crud import create_media, get_channel_by_id, get_all_not_downloaded_media, find_downloaded_by_file_id
+from webapp.database import SessionLocal
+from webapp.telegram_client import client, download_media_from_message
+from webapp.logging_conf import logger
 
 
 def format_speed(bytes_per_second):

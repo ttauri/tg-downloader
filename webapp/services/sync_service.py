@@ -6,16 +6,16 @@ from collections import defaultdict
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.models import Media, Channel
-from app.database import SessionLocal
-from app.services.task_manager import Task, TaskStatus, CancelledError
-from app.services.storage_service import (
+from webapp.models import Media, Channel
+from webapp.database import SessionLocal
+from webapp.services.task_manager import Task, TaskStatus, CancelledError
+from webapp.services.storage_service import (
     compute_file_hash,
     get_channel_folder_path,
     get_folder_stats,
     move_to_orphaned,
 )
-from app.logging_conf import logger
+from webapp.logging_conf import logger
 
 
 def get_downloaded_media_by_channel(db: Session, channel_id: str):

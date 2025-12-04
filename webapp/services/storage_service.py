@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Optional
 from collections import defaultdict
 
-from app.config import settings
-from app.services.helper_functions import sanitize_dirname
+from webapp.config import settings
+from webapp.services.helper_functions import sanitize_dirname
 
 
 CHUNK_SIZE = 1024 * 1024  # 1MB for partial hash
