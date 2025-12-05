@@ -164,12 +164,14 @@ async def run_download_task(channel_id: str, task):
 
 async def run_sync_task(channel_id: str, channel_name: str, task):
     """Background task wrapper for syncing storage."""
+    logger.info(f"[SYNC] Starting sync task for channel_id={channel_id}, channel_name={channel_name}")
     try:
-        await sync_channel_storage(channel_id=channel_id, channel_name=channel_name, task=task)
+        result = await sync_channel_storage(channel_id=channel_id, channel_name=channel_name, task=task)
+        logger.info(f"[SYNC] Sync completed for channel_id={channel_id}, result={result}")
     except asyncio.CancelledError:
-        logger.info(f"Sync task cancelled for channel {channel_id}")
+        logger.info(f"[SYNC] Sync task cancelled for channel {channel_id}")
     except Exception as e:
-        logger.exception(f"Sync task failed for channel {channel_id}: {e}")
+        logger.exception(f"[SYNC] Sync task failed for channel {channel_id}: {e}")
 
 
 @app.post("/fetch_messages/")

@@ -1,0 +1,52 @@
+# =============================================================================
+# VIDEO CONCATENATOR CONFIGURATION
+# =============================================================================
+
+# Target resolution for output video
+# Options: 720p, 1080p, 1440p, 4k, source
+# "source" keeps the resolution of the first video
+# Note: Most Telegram videos are 480-720p, so 720p is usually sufficient
+target_resolution: 720p
+
+# Target frames per second
+# Common values: 24 (film), 30 (standard), 60 (smooth)
+target_fps: 30
+
+# Aspect ratio for output video
+# Options: 16:9, 4:3, 21:9, source
+# Videos will be padded with black bars if needed
+aspect_ratio: "16:9"
+
+# Video codec for encoding
+# libx264 is widely compatible and good quality
+video_codec: libx264
+
+# Audio codec
+audio_codec: aac
+
+# Audio bitrate
+audio_bitrate: 192k
+
+# CRF (Constant Rate Factor) - quality setting
+# Range: 0-51 (0 = lossless, 51 = worst)
+# Recommended values:
+#   18 = visually lossless (large files)
+#   23 = high quality (default for x264)
+#   26 = good quality (smaller files)
+#   28 = acceptable quality (much smaller)
+# For Telegram videos (typically 300-700 Kbps sources), 26 is plenty
+crf: 26
+
+# Encoding preset - speed vs compression tradeoff
+# Options: ultrafast, fast, medium, slow, veryslow
+# Faster = larger file, slower = smaller file (same quality)
+# "medium" is a good balance, "slow" for smaller files
+preset: medium
+
+# Video file extensions to process
+video_extensions:
+  - .mp4
+  - .avi
+  - .mov
+  - .mkv
+  - .webm
