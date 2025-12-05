@@ -14,3 +14,4 @@ quality_high_min: 1.0
 quality_medium_min: 0.5
 bitrate_factor: 0.13
 num_categories: 3
+bitrate_threshold: 300

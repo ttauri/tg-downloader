@@ -1,0 +1,65 @@
+# =============================================================================
+# VIDEO SAFETY ANALYZER CONFIGURATION
+# =============================================================================
+
+# =============================================================================
+# ANALYSIS SETTINGS
+# =============================================================================
+
+# Detection confidence threshold (0.0 - 1.0)
+# Only detections above this confidence are recorded
+# Lower = more detections (may include false positives)
+# Higher = fewer detections (may miss some content)
+threshold: 0.4
+
+# Video file extensions to process
+video_extensions:
+  - .mp4
+  - .avi
+  - .mov
+  - .mkv
+  - .webm
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+
+# NudeNet model settings
+# model_path: path to custom .onnx model (leave empty for default 320n)
+# model_resolution: must match model (320 for 320n, 640 for 640m)
+model_path: ""
+model_resolution: 320
+
+# =============================================================================
+# TIMESTAMP GENERATION - UNSAFE CRITERIA
+# =============================================================================
+# These settings control what is considered "unsafe" when generating
+# timestamp ranges. You can change these and re-run timestamp generation
+# without re-analyzing videos.
+
+# Labels to consider unsafe
+# Any second with ANY of these labels (above unsafe_threshold) is marked unsafe
+#
+# Available labels:
+#   FEMALE_GENITALIA_COVERED  - Covered female genitalia
+#   FEMALE_GENITALIA_EXPOSED  - Exposed female genitalia
+#   FEMALE_BREAST_EXPOSED     - Exposed female breasts
+#   BUTTOCKS_EXPOSED          - Exposed buttocks
+#   ANUS_EXPOSED              - Exposed anus
+#   MALE_GENITALIA_EXPOSED    - Exposed male genitalia
+#   MALE_BREAST_EXPOSED       - Exposed male chest
+#   FACE_MALE                 - Male face detected
+unsafe_labels:
+  - FEMALE_GENITALIA_EXPOSED
+  - MALE_GENITALIA_EXPOSED
+  - ANUS_EXPOSED
+
+# Minimum confidence for a label to count as "detected" for timestamp purposes
+# This can be different from the analysis threshold
+# Example: analyze with 0.4 threshold, but only mark unsafe if confidence >= 0.6
+unsafe_threshold: 0.5
+
+# Merge unsafe ranges that are closer than N seconds apart
+# Helps avoid many tiny cuts for flickering detections
+# Set to 0 to disable merging
+merge_gap: 2
